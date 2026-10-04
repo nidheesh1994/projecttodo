@@ -1238,7 +1238,11 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const fit = layoutOf() === "focus" || (layoutOf() === "wall" && node.id === "tl-wrap");
     if (!fit) { node.style.maxHeight = ""; return; }
     const top = node.getBoundingClientRect().top + window.scrollY;
-    node.style.maxHeight = Math.max(240, window.innerHeight - top - 16) + "px";
+    // what follows the panel in its section (the legend under the timeline) stays in view, and the page keeps its bottom padding
+    let below = 0;
+    for (let sib = node.nextElementSibling; sib; sib = sib.nextElementSibling) { const cs = getComputedStyle(sib); below += sib.getBoundingClientRect().height + parseFloat(cs.marginTop || 0) + parseFloat(cs.marginBottom || 0); }
+    const wrapPad = parseFloat(getComputedStyle(node.closest(".wrap") || document.body).paddingBottom || 0);
+    node.style.maxHeight = Math.max(240, window.innerHeight - top - below - wrapPad) + "px";
   }
   // ---------- the Focus layout's timeline: an agenda, one row per day; the Wall layout's: a month calendar ----------
   // What touches a day: each main to-do whose span covers it, and every to-do under one that started or finished on it.
