@@ -507,7 +507,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
 @media (max-width: 560px) { .form { grid-template-columns: 1fr; } .form .full { grid-column: auto; } }
 
 /* Doc drawer */
-.drawer { position: fixed; top: env(safe-area-inset-top, 0px); right: 0; bottom: 0; width: min(760px, 100%); background: var(--surface); color: var(--fg); box-shadow: var(--shadow); z-index: 60; display: flex; flex-direction: column; border-left: 1px solid var(--line); }
+.drawer { position: fixed; top: env(safe-area-inset-top, 0px); right: 0; bottom: 0; width: min(900px, 100%); background: var(--surface); color: var(--fg); box-shadow: var(--shadow); z-index: 60; display: flex; flex-direction: column; border-left: 1px solid var(--line); }
+/* The rest of the page dims and blurs behind the document; a click on it closes the drawer. */
+.drawer::before { content: ""; position: fixed; top: 0; bottom: 0; left: 0; right: min(900px, 100vw); background: var(--scrim); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
 .drawer-head { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; }
 .drawer-head code { font-size: 12.5px; flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
 .drawer-head .snap { color: var(--muted); font-size: 12px; white-space: nowrap; }
@@ -2168,6 +2170,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function closeDrawer() { $("#drawer").hidden = true; drawerPath = ""; }
   $("#dr-close").addEventListener("click", closeDrawer);
   $("#dr-copy").addEventListener("click", () => copyText(drawerPath, $("#dr-path")));
+  $("#drawer").addEventListener("click", e => { if (e.target === $("#drawer")) $("#drawer").hidden = true; });
   // ---------- projects ----------
   function renderProjects() {
     const box = $("#project-cards");
