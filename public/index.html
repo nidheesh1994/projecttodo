@@ -215,6 +215,10 @@ code { font-family: var(--font-mono); }
 .dv-dates dt { color: var(--muted); }
 .dv-dates dd { margin: 0; font-family: var(--font-mono); font-size: 12px; text-align: right; }
 .dv-dates dd.unset { color: var(--muted); }
+.form .dt { display: flex; gap: 6px; }
+.form .dt input[type="date"] { flex: 1; min-width: 0; }
+.form .dt input[type="time"] { width: 7.2em; flex: none; }
+.tl .hours { fill: var(--accent); }
 .dv-dates .dv-days { grid-column: 1 / -1; color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; border-top: 1px solid var(--line); }
 .dv-grid dt { color: var(--muted); }
 .dv-grid dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
@@ -533,12 +537,12 @@ svg.tl { display: block; font-family: var(--font-ui); }
         <option value="assistant">Assistant</option>
         <option value="both">Both</option>
       </select></label>
-      <label class="f">Estimate (days, if no dates)<input id="ed-est" name="estimate_days" type="number" min="0" step="0.5" inputmode="decimal"></label>
+      <label class="f">Estimate (2 d or 3 h)<input id="ed-est" name="estimate_days" type="text" inputmode="decimal" placeholder="2 d, 3 h" autocomplete="off"></label>
       <label class="f full">Doc (repo-relative path)<input id="ed-doc" name="doc" type="text" placeholder="docs/marketplace-todo.md" maxlength="300"></label>
       <label class="f">Estimated start<input id="ed-ps" name="planned_start" type="date"></label>
       <label class="f">Estimated end<input id="ed-pe" name="planned_end" type="date"></label>
-      <label class="f">Actual start<input id="ed-as" name="actual_start" type="date"></label>
-      <label class="f">Actual end<input id="ed-ad" name="actual_done" type="date"></label>
+      <label class="f">Actual start<span class="dt"><input id="ed-as" name="actual_start" type="date"><input id="ed-ast" name="actual_start_time" type="time" aria-label="Actual start time"></span></label>
+      <label class="f">Actual end<span class="dt"><input id="ed-ad" name="actual_done" type="date"><input id="ed-adt" name="actual_done_time" type="time" aria-label="Actual end time"></span></label>
     </div>
     <div class="confirm" id="ed-confirm" hidden>
       <span class="q" id="ed-confirm-text"></span>
@@ -638,6 +642,22 @@ svg.tl { display: block; font-family: var(--font-ui); }
   const fmtShort = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
   const fmtMonth = new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
   const fmtDay = s => { const n = parseDay(s); return n === null ? "" : fmtShort.format(dayDate(n)); };
+  // Times of day ride with the actual dates (HH:MM, local). Estimates under a day read as hours, at 8 hours a day.
+  const HOURS_A_DAY = 8;
+  const parseTime = s => (typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s)) ? (+s.slice(0, 2)) * 60 + (+s.slice(3, 5)) : null;
+  const nowTime = () => { const d = new Date(); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+  const whenText = (date, time) => { const d = fmtDay(date); return d ? (parseTime(time) !== null ? `${d} ${time}` : d) : ""; };
+  const estText = days => (days === null || days === undefined) ? "" : (days < 1 ? `${Math.round(days * HOURS_A_DAY * 10) / 10} h` : `${days} d`);
+  const minutesText = m => (m < 60 ? `${Math.round(m)} m` : (m % 60 < 1 || m >= 600) ? `${Math.round(m / 60 * 10) / 10} h` : `${Math.floor(m / 60)} h ${Math.round(m % 60)} m`);
+  // The actual range as words: "4 Oct 12:43 to 15:20", "3 Oct to today", "from 4 Oct 12:43".
+  function actualRange(it, openWord) {
+    const a = fmtDay(it.actual_start), b = fmtDay(it.actual_done);
+    const ta = parseTime(it.actual_start_time) !== null ? it.actual_start_time : "", tb = parseTime(it.actual_done_time) !== null ? it.actual_done_time : "";
+    if (a && b) return a === b ? (ta && tb ? `${a} ${ta} to ${tb}` : a) : `${a}${ta ? " " + ta : ""} to ${b}${tb ? " " + tb : ""}`;
+    if (a) return openWord ? `${a}${ta ? " " + ta : ""} to ${openWord}` : `from ${a}${ta ? " " + ta : ""}`;
+    if (b) return `by ${b}${tb ? " " + tb : ""}`;
+    return "";
+  }
   const nowIso = () => new Date().toISOString();
   const num = v => (typeof v === "number" && Number.isFinite(v)) ? v : (v === null || v === undefined || v === "" ? Number.POSITIVE_INFINITY : (Number.isFinite(+v) ? +v : Number.POSITIVE_INFINITY));
   const estOf = it => {
@@ -755,12 +775,12 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function statusDates(it, newStatus) {
     const t = todayStr();
     const p = {};
-    if (newStatus === "doing" && !it.actual_start) p.actual_start = t;
+    if (newStatus === "doing" && !it.actual_start) { p.actual_start = t; p.actual_start_time = nowTime(); }
     if (newStatus === "done") {
-      if (!it.actual_done) p.actual_done = t;
-      if (!it.actual_start) p.actual_start = t;
+      if (!it.actual_done) { p.actual_done = t; p.actual_done_time = nowTime(); }
+      if (!it.actual_start) { p.actual_start = t; p.actual_start_time = nowTime(); }
     }
-    if (statusOf(it) === "done" && newStatus !== "done" && it.actual_done) p.actual_done = null;
+    if (statusOf(it) === "done" && newStatus !== "done" && it.actual_done) { p.actual_done = null; p.actual_done_time = null; }
     return p;
   }
   function renumber(map, list) {
@@ -784,7 +804,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       if (laneKey === "done" && refuseDone(idx, it)) return;
       const dates = {};
       if (!idx.parentOf(it) && (laneKey === "todo" || laneKey === "doing") && !it.planned_start && !it.planned_end) Object.assign(dates, defaultDates(idx, it));
-      if (!idx.parentOf(it) && laneKey === "done" && !it.actual_done) { const last = latestDescendantDone(idx, it); if (last) dates.actual_done = last; }
+      if (!idx.parentOf(it) && laneKey === "done" && !it.actual_done) { const last = latestDescendantDoneAt(idx, it); if (last) { dates.actual_done = last.date; dates.actual_done_time = last.time; } }
       addPatch(patches, it.id, { status: laneKey, ...statusDates(it, laneKey), ...dates });
       // A draft group moves with its lines; a to-do dropped into Drafts takes the children that shared its status.
       if (was === "draft" || laneKey === "draft") for (const r of idx.rows.filter(r => r.anc.includes(it.id) && statusOf(r.it) === was)) addPatch(patches, r.it.id, { status: laneKey, ...statusDates(r.it, laneKey) });
@@ -842,15 +862,23 @@ svg.tl { display: block; font-family: var(--font-ui); }
   // ---------- board ----------
   function durations(it) {
     const est = estOf(it);
-    let actual = null, open = false;
+    let actual = null, open = false, minutes = null;
     const a = parseDay(it.actual_start);
     if (a !== null) {
       let e = parseDay(it.actual_done);
       if (e === null && statusOf(it) === "doing") { e = parseDay(todayStr()); open = true; }
       if (e !== null) actual = Math.max(1, e - a + 1);
+      // with times of day on both ends (or a running to-do started today), the duration is known to the minute
+      const ta = parseTime(it.actual_start_time);
+      if (ta !== null && e !== null) {
+        const tb = open ? (() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); })() : parseTime(it.actual_done_time);
+        if (tb !== null) minutes = Math.max(0, (e - a) * 1440 + tb - ta);
+      }
     }
-    return { est, actual, open };
+    return { est, actual, open, minutes };
   }
+  // "2 h 37 m", "47 m", "3 d": minutes when known and under a day, days otherwise.
+  const tookText = d => (d.minutes !== null && d.minutes < 1440) ? minutesText(d.minutes) : (d.actual !== null ? `${d.actual} d` : "");
   // A fact row: its name on the left, the value on the right.
   function factRow(name, parts) {
     const value = el("span", { class: "fact-v" });
@@ -880,9 +908,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function compactMeta(it, st) {
     const d = durations(it);
     if (st === "done") return it.actual_done ? fmtDay(it.actual_done) : "";
-    if (st === "doing") return d.actual !== null ? `${d.actual} d so far` : (it.actual_start ? `from ${fmtDay(it.actual_start)}` : "");
+    if (st === "doing") return d.actual !== null ? `${tookText(d)} so far` : (it.actual_start ? `from ${whenText(it.actual_start, it.actual_start_time)}` : "");
     if (it.planned_start || it.planned_end) return rangeText(it.planned_start, it.planned_end);
-    return d.est !== null ? `est ${d.est} d` : "";
+    return d.est !== null ? `est ${estText(d.est)}` : "";
   }
   // Where a drop lands: before the card nearest the pointer when the pointer is in its upper half, after it otherwise. Works for one column and for the two columns of Drafts.
   function dropBefore(cards, x, y) {
@@ -976,7 +1004,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const parts = [];
     if (g.actual) { const n = g.actual[1] - g.actual[0] + 1; parts.push(g.open ? `${n} d so far` : `${n} d`); }
     if (g.est) { const n = g.est[1] - g.est[0] + 1; parts.push(`est ${n} d`); }
-    else if (g.unscheduled && g.estDays) parts.push(`est ${g.estDays} d`);
+    else if (g.unscheduled && g.estDays) parts.push(`est ${estText(g.estDays)}`);
     return parts.join(" · ");
   }
   function truncate(s, max) {
@@ -986,10 +1014,11 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function tipText(it, g) {
     const lines = [it.title || "Untitled", `${LANES.find(l => l.key === statusOf(it)).label}${it.owner && OWNER_LABEL[it.owner] ? " · " + OWNER_LABEL[it.owner] : ""}`];
     if (it.planned_start || it.planned_end) lines.push(`Estimated: ${rangeText(it.planned_start, it.planned_end)}`);
-    if (it.actual_start || it.actual_done) lines.push(`Actual: ${rangeText(it.actual_start, it.actual_done, statusOf(it) === "doing" ? "today" : "")}`);
+    if (it.actual_start || it.actual_done) lines.push(`Actual: ${actualRange(it, statusOf(it) === "doing" ? "now" : "")}`);
     const est = estOf(it);
-    if (est) lines.push(`Estimate: ${est} d`);
-    if (g.actual) lines.push(`Took: ${g.actual[1] - g.actual[0] + 1} d${g.open ? " so far" : ""}`);
+    if (est) lines.push(`Estimate: ${estText(est)}`);
+    const du = durations(it);
+    if (du.actual !== null) lines.push(`Took: ${tookText(du)}${du.open ? " so far" : ""}`);
     if (it.doc) lines.push(String(it.doc));
     return lines.join("\n");
   }
@@ -1008,11 +1037,16 @@ svg.tl { display: block; font-family: var(--font-ui); }
     return out;
   }
   // The day the last finished to-do under this one ended, as YYYY-MM-DD, or null.
-  function latestDescendantDone(idx, it) {
-    let best = null;
-    for (const r of idx.rows) if (r.anc.includes(it.id) && statusOf(r.it) === "done") { const d = parseDay(r.it.actual_done); if (d !== null && (best === null || d > best)) best = d; }
-    return best === null ? null : dayStr(best);
+  function latestDescendantDoneAt(idx, it) {
+    let best = null, bestMin = null, time = null;
+    for (const r of idx.rows) if (r.anc.includes(it.id) && statusOf(r.it) === "done") {
+      const d = parseDay(r.it.actual_done); if (d === null) continue;
+      const m = d * 1440 + (parseTime(r.it.actual_done_time) || 0);
+      if (bestMin === null || m > bestMin) { bestMin = m; best = d; time = parseTime(r.it.actual_done_time) !== null ? r.it.actual_done_time : null; }
+    }
+    return best === null ? null : { date: dayStr(best), time };
   }
+  const latestDescendantDone = (idx, it) => { const at = latestDescendantDoneAt(idx, it); return at ? at.date : null; };
   // The days of each main to-do, in order: its actual span (to today while it runs; to the last finished child when it is done), else its
   // estimated span, else it starts the day after the estimated end of the main to-do before it and lasts its estimate in days (one day if none).
   function mainSpans(idx, mains, today) {
@@ -1179,6 +1213,18 @@ svg.tl { display: block; font-family: var(--font-ui); }
       if (!sp.est || sp.kind !== "actual" || (sp.est[0] === sp.start && sp.est[1] === sp.end)) continue;
       svg.append(svgEl("rect", { class: "est", x: X.get(sp.est[0]), y: laneY[sp.lane] + BOX_H + 2, width: X.get(sp.est[1] + 1) - X.get(sp.est[0]) - GAP, height: 3, rx: 1.5 }));
     }
+    // the hours of a main to-do with times of day: a thin bar along the top of its box, from its start time to its end time or now
+    const minuteX = (day, minutes) => X.get(day) + (dayW.get(day) || MINDAY) * (minutes / 1440);
+    for (const sp of mainList) {
+      if (sp.kind !== "actual") continue;
+      const ta = parseTime(sp.it.actual_start_time); if (ta === null) continue;
+      const b = boxOf.get(sp.it.id); if (!b) continue;
+      const ad = parseDay(sp.it.actual_done), tb = parseTime(sp.it.actual_done_time);
+      const now = new Date();
+      const x1 = minuteX(sp.start, ta);
+      const x2 = ad !== null && tb !== null ? minuteX(ad, tb) : (sp.open ? minuteX(today, now.getHours() * 60 + now.getMinutes()) : X.get(sp.end + 1) - GAP);
+      if (x2 > x1) svg.append(svgEl("rect", { class: "hours", x: x1, y: b.y, width: x2 - x1, height: 3, rx: 1.5 }));
+    }
     // edges: a parent to each child, top to bottom; a to-do to its next one, left to right
     for (const b of boxes) {
       const it = idx.byId.get(b.id);
@@ -1269,13 +1315,13 @@ svg.tl { display: block; font-family: var(--font-ui); }
     // the four dates, on the right; "-" where none is set
     const dates = $("#dv-dates");
     dates.replaceChildren();
-    for (const [label, value] of [["Estimated start", it.planned_start], ["Estimated end", it.planned_end], ["Actual start", it.actual_start], ["Actual end", it.actual_done]]) {
-      const text = parseDay(value) === null ? "" : fmtDay(value);
+    for (const [label, value, time] of [["Estimated start", it.planned_start], ["Estimated end", it.planned_end], ["Actual start", it.actual_start, it.actual_start_time], ["Actual end", it.actual_done, it.actual_done_time]]) {
+      const text = whenText(value, time);
       dates.append(el("dt", { text: label }), el("dd", { class: text ? "" : "unset", text: text || "-" }));
     }
     const days = [];
-    if (d.est !== null) days.push(`est ${d.est} d`);
-    if (d.actual !== null) days.push(d.open ? `${d.actual} d so far` : `took ${d.actual} d`);
+    if (d.est !== null) days.push(`est ${estText(d.est)}`);
+    if (d.actual !== null) days.push(d.open ? `${tookText(d)} so far` : `took ${tookText(d)}`);
     if (days.length) dates.append(el("div", { class: "dv-days", text: days.join(" · ") }));
     if (!parent && !it.planned_start && !it.planned_end && !it.actual_start && st !== "draft") {
       const sp = mainSpans(idx, orderedKids(idx, null).filter(m => statusOf(m) !== "draft"), today).find(x => x.it.id === it.id);
@@ -1320,7 +1366,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
   // ---------- editor ----------
   const F = {
     title: $("#ed-title-in"), notes: $("#ed-notes"), parent: $("#ed-parent"), next: $("#ed-next"), status: $("#ed-status"), owner: $("#ed-owner"),
-    est: $("#ed-est"), doc: $("#ed-doc"), ps: $("#ed-ps"), pe: $("#ed-pe"), as: $("#ed-as"), ad: $("#ed-ad"),
+    est: $("#ed-est"), doc: $("#ed-doc"), ps: $("#ed-ps"), pe: $("#ed-pe"), as: $("#ed-as"), ad: $("#ed-ad"), ast: $("#ed-ast"), adt: $("#ed-adt"),
   };
   function openEditor(id, preset = {}) {
     const idx = index();
@@ -1333,12 +1379,14 @@ svg.tl { display: block; font-family: var(--font-ui); }
     F.notes.value = v.notes || "";
     F.status.value = statusOf(v);
     F.owner.value = v.owner && OWNER_LABEL[v.owner] ? v.owner : "";
-    F.est.value = estOf(v) === null ? "" : String(estOf(v));
+    F.est.value = estOf(v) === null ? "" : (estOf(v) < 1 ? `${Math.round(estOf(v) * HOURS_A_DAY * 10) / 10} h` : `${estOf(v)} d`);
     F.doc.value = v.doc || "";
     F.ps.value = parseDay(v.planned_start) === null ? "" : v.planned_start;
     F.pe.value = parseDay(v.planned_end) === null ? "" : v.planned_end;
     F.as.value = parseDay(v.actual_start) === null ? "" : v.actual_start;
     F.ad.value = parseDay(v.actual_done) === null ? "" : v.actual_done;
+    F.ast.value = parseTime(v.actual_start_time) === null ? "" : v.actual_start_time;
+    F.adt.value = parseTime(v.actual_done_time) === null ? "" : v.actual_done_time;
     // parent options: every item in tree order, minus this one and its descendants
     F.parent.replaceChildren(el("option", { value: "", text: "None (a root to-do)" }));
     for (const r of idx.rows) {
@@ -1376,8 +1424,11 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function closeEditor() { $("#editor").hidden = true; state.editing = null; }
   function readForm() {
     const dateOr = s => (parseDay(s) === null ? null : s);
-    const estRaw = F.est.value.trim();
-    const estN = estRaw === "" ? null : +estRaw;
+    // the estimate reads "2", "2 d", "3 h" or "90 m"; hours and minutes become days at 8 hours a day
+    const estRaw = F.est.value.trim().toLowerCase();
+    const em = estRaw.match(/^(\d+(?:[.,]\d+)?)\s*(d|day|days|h|hr|hrs|hour|hours|m|min|mins)?$/);
+    const estN = estRaw === "" ? null : (em ? (+em[1].replace(",", ".")) / (/^h/.test(em[2] || "") ? HOURS_A_DAY : /^m/.test(em[2] || "") ? HOURS_A_DAY * 60 : 1) : NaN);
+    const timeOr = (dateValue, s) => (parseDay(dateValue) === null || parseTime(s) === null ? null : s);
     return {
       title: F.title.value.trim(),
       notes: F.notes.value.trim(),
@@ -1386,8 +1437,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
       status: STATUS_SET.has(F.status.value) ? F.status.value : "todo",
       owner: OWNER_LABEL[F.owner.value] ? F.owner.value : null,
       doc: F.doc.value.trim() || null,
-      estimate_days: (estN === null || !Number.isFinite(estN) || estN <= 0) ? null : estN,
+      estimate_days: estN === null ? null : (Number.isNaN(estN) ? NaN : (!Number.isFinite(estN) || estN <= 0 ? null : Math.round(estN * 1000) / 1000)),
       planned_start: dateOr(F.ps.value), planned_end: dateOr(F.pe.value), actual_start: dateOr(F.as.value), actual_done: dateOr(F.ad.value),
+      actual_start_time: timeOr(F.as.value, F.ast.value), actual_done_time: timeOr(F.ad.value, F.adt.value),
     };
   }
   $("#ed-form").addEventListener("submit", async e => {
@@ -1397,6 +1449,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (!v.title) { toast("Give the to-do a title.", true); F.title.focus(); return; }
     if (v.planned_start && v.planned_end && v.planned_end < v.planned_start) { toast("The planned end is before the planned start.", true); return; }
     if (v.actual_start && v.actual_done && v.actual_done < v.actual_start) { toast("The actual done date is before the actual start.", true); return; }
+    if (v.actual_start && v.actual_done === v.actual_start && v.actual_start_time && v.actual_done_time && v.actual_done_time < v.actual_start_time) { toast("The actual end time is before the start time.", true); return; }
+    if (Number.isNaN(v.estimate_days)) { toast("The estimate reads like 2 d or 3 h.", true); F.est.focus(); return; }
     const idx = index();
     const stamp = nowIso();
     if (state.editing.isNew) {
@@ -1695,10 +1749,10 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const d = durations(it);
     const estParts = [];
     if (it.planned_start || it.planned_end) estParts.push(rangeText(it.planned_start, it.planned_end));
-    if (d.est !== null) estParts.push(`${d.est} d`);
+    if (d.est !== null) estParts.push(estText(d.est));
     const actualParts = [];
-    if (it.actual_start || it.actual_done) actualParts.push(rangeText(it.actual_start, it.actual_done, st === "doing" ? "today" : ""));
-    if (d.actual !== null) actualParts.push(`${d.actual} d`);
+    if (it.actual_start || it.actual_done) actualParts.push(actualRange(it, st === "doing" ? "now" : ""));
+    if (d.actual !== null) actualParts.push(tookText(d) + (d.open ? " so far" : ""));
     const facts = el("div", { class: "facts" });
     if (estParts.length) facts.append(factRow("Est", estParts));
     if (actualParts.length) facts.append(factRow("Actual", actualParts));

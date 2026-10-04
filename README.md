@@ -136,10 +136,15 @@ id, project_id, title, notes, parent_id (null = main to-do), next_id (the siblin
 order (10, 20, …), status: draft | todo (Next) | doing (Current) | done | deferred (Later),
 owner: user | assistant | both | null, doc, estimate_days,
 planned_start, planned_end (estimated start and end), actual_start, actual_done (actual start and end),
+actual_start_time, actual_done_time (HH:MM, local; stamped by the server with the dates),
 created_at, updated_at (ISO 8601), version (kept by the server)
 ```
 
-Dropping a card in Current sets `actual_start` when empty; in Done sets `actual_done` (for a
+Estimates are days; under a day they show as hours at 8 hours a day, and the editor takes
+"2 d", "3 h" or "90 m". A status change to Current or Done stamps the actual date and the
+time of day, on the page and on the server, so a to-do that started at 12:43 and ended at
+15:20 reads "4 Oct 12:43 to 15:20 · 2 h 37 m" on its card and sits by the hour on the
+timeline. Dropping a card in Current sets `actual_start` when empty; in Done sets `actual_done` (for a
 main to-do, the end of its last finished child) and `actual_start` when empty; leaving
 Done clears `actual_done`. A to-do can be set done only when everything under it is done:
 the page checks this on drops, in the editor and on the ticks, and the server refuses such

@@ -90,6 +90,26 @@ class HttpError extends Error {
 const slug = text => (String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)) || "item";
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const isDay = v => v === null || v === undefined || (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v));
+const isTime = v => v === null || v === undefined || (typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v));
+const nowTime = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; };
+// Times of day ride with the actual dates: a write that sets a date to today without a time gets the time now; a date
+// that changes without a time loses the old one; a status change to doing or done stamps the dates it needs.
+function stampTimes(existing, patch) {
+  const today = todayStr();
+  const out = { ...patch };
+  for (const [date, time] of [["actual_start", "actual_start_time"], ["actual_done", "actual_done_time"]]) {
+    if (date in out && !(time in out) && out[date] !== (existing ? existing[date] : null)) out[time] = out[date] === today ? nowTime() : null;
+    if (date in out && out[date] === null) out[time] = null;
+  }
+  const next = { ...(existing || {}), ...out };
+  if (out.status === "doing" && !next.actual_start) { out.actual_start = today; out.actual_start_time = nowTime(); }
+  if (out.status === "done") {
+    if (!next.actual_done) { out.actual_done = today; out.actual_done_time = nowTime(); }
+    if (!next.actual_start) { out.actual_start = today; out.actual_start_time = nowTime(); }
+  }
+  if (existing && existing.status === "done" && out.status && out.status !== "done" && !("actual_done" in out)) { out.actual_done = null; out.actual_done_time = null; }
+  return out;
+}
 const findTodo = id => store.todos.find(row => row.id === id) || null;
 const findProject = id => store.projects.find(row => row.id === id) || null;
 
@@ -110,6 +130,7 @@ function cleanTodo(data, { creating } = {}) {
   if ("status" in row && !STATUSES.has(row.status)) throw new HttpError(400, "invalid_argument", "The status must be draft, todo, doing, done or deferred.");
   if ("owner" in row && row.owner !== null && !OWNERS.has(row.owner)) throw new HttpError(400, "invalid_argument", "The owner must be user, assistant, both or null.");
   for (const key of ["planned_start", "planned_end", "actual_start", "actual_done"]) if (key in row && !isDay(row[key])) throw new HttpError(400, "invalid_argument", `${key} must be a date as YYYY-MM-DD, or null.`);
+  for (const key of ["actual_start_time", "actual_done_time"]) if (key in row && !isTime(row[key])) throw new HttpError(400, "invalid_argument", `${key} must be a time of day as HH:MM (24-hour), or null.`);
   return row;
 }
 
@@ -122,7 +143,7 @@ function plan(write) {
     if (existing && write.if_version === undefined) throw new HttpError(409, "already_exists", `A to-do with id ${row.id} already exists.`, { version: existing.version });
     if (existing && Number(write.if_version) !== existing.version) throw new HttpError(409, "version_mismatch", "This to-do was changed meanwhile; it was reloaded.", { version: existing.version });
     return () => {
-      const next = { ...row, version: existing ? existing.version + 1 : 1 };
+      const next = { ...row, ...stampTimes(existing, row), version: existing ? existing.version + 1 : 1 };
       if (existing) store.todos[store.todos.indexOf(existing)] = next;
       else store.todos.push(next);
       return next;
@@ -137,7 +158,7 @@ function plan(write) {
     if (op === "delete") return () => { store.todos.splice(store.todos.indexOf(existing), 1); for (const p of store.projects) if (p.current_id === id) p.current_id = null; return { id, deleted: true }; };
     const patch = cleanTodo(write.data);
     return () => {
-      const next = { ...existing, ...patch, version: existing.version + 1 };
+      const next = { ...existing, ...stampTimes(existing, patch), version: existing.version + 1 };
       store.todos[store.todos.indexOf(existing)] = next;
       return next;
     };
@@ -220,7 +241,7 @@ async function updateProject(id, data, ifVersion) {
         const row = findTodo(String(data.current_id));
         if (!row || row.project_id !== id || row.parent_id) throw new HttpError(400, "invalid_argument", "The current to-do must be a main to-do of this project.");
         // Taking a main to-do up: it is in progress from today, unless it already has a start date.
-        const next = { ...row, status: row.status === "done" ? row.status : "doing", actual_start: row.actual_start || todayStr(), updated_at: new Date().toISOString(), version: row.version + 1 };
+        const next = { ...row, status: row.status === "done" ? row.status : "doing", actual_start: row.actual_start || todayStr(), actual_start_time: row.actual_start ? (row.actual_start_time || null) : nowTime(), updated_at: new Date().toISOString(), version: row.version + 1 };
         store.todos[store.todos.indexOf(row)] = next;
       }
       patch.current_id = data.current_id === null ? null : String(data.current_id);
@@ -293,8 +314,9 @@ const TODO_FIELDS = {
   title: { type: "string" }, notes: { type: "string" }, parent_id: { type: ["string", "null"], description: "The parent to-do; null for a main to-do." },
   next_id: { type: ["string", "null"], description: "The sibling that comes after this one." }, status: { type: "string", enum: [...STATUSES] },
   owner: { type: ["string", "null"], enum: [...OWNERS, null] }, doc: { type: ["string", "null"], description: "A markdown file, relative to the docs folder." },
-  estimate_days: { type: ["number", "null"] }, planned_start: { type: ["string", "null"], description: "Estimated start, YYYY-MM-DD." }, planned_end: { type: ["string", "null"], description: "Estimated end, YYYY-MM-DD." },
-  actual_start: { type: ["string", "null"], description: "YYYY-MM-DD." }, actual_done: { type: ["string", "null"], description: "Actual end, YYYY-MM-DD." }, order: { type: "number", description: "Position among siblings; 10, 20, 30 …" },
+  estimate_days: { type: ["number", "null"], description: "Size in days; fractions are hours at 8 hours a day (0.375 = 3 h)." }, planned_start: { type: ["string", "null"], description: "Estimated start, YYYY-MM-DD." }, planned_end: { type: ["string", "null"], description: "Estimated end, YYYY-MM-DD." },
+  actual_start: { type: ["string", "null"], description: "YYYY-MM-DD. Setting it to today without a time stamps the time now." }, actual_start_time: { type: ["string", "null"], description: "HH:MM, 24-hour local time; filled by the server when a status change stamps the date." },
+  actual_done: { type: ["string", "null"], description: "Actual end, YYYY-MM-DD." }, actual_done_time: { type: ["string", "null"], description: "HH:MM, 24-hour local time." }, order: { type: "number", description: "Position among siblings; 10, 20, 30 …" },
 };
 const MCP_TOOLS = [
   { name: "get_playbook", description: "How this board is meant to be worked: lanes, rules, how to review drafts, how to plan a to-do with a document, the document template. Call it first.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
@@ -339,7 +361,7 @@ function treeOrder(rows) {
 }
 
 function newRow(data, stamp) {
-  return { notes: "", parent_id: null, next_id: null, status: "todo", owner: null, doc: null, estimate_days: null, planned_start: null, planned_end: null, actual_start: null, actual_done: null, ...data, created_at: stamp, updated_at: stamp };
+  return { notes: "", parent_id: null, next_id: null, status: "todo", owner: null, doc: null, estimate_days: null, planned_start: null, planned_end: null, actual_start: null, actual_start_time: null, actual_done: null, actual_done_time: null, ...data, created_at: stamp, updated_at: stamp };
 }
 
 function uniqueId(base) {
@@ -426,7 +448,7 @@ async function mcpMessage(msg) {
   switch (msg.method) {
     case "initialize": {
       const asked = msg.params && msg.params.protocolVersion;
-      return reply({ protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0], capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } }, serverInfo: { name: "projecttodo", version: "0.2.0" }, instructions: "A to-do board shared with a person. Call get_playbook first: it says how the board is worked. In short: projects hold to-dos; a to-do without a parent is a main to-do and sits on the timeline by its dates. Lanes are statuses: draft (jotted down by the person, to discuss one group at a time), todo (Next), doing (Current), done, deferred (Later). After a draft is discussed, write its plan with write_doc, put the path in doc, set owner, estimate_days and planned dates, and move it on (set_current for the one that starts now). Keep actual dates current; a to-do is done only when everything under it is done. Never delete the person's draft lines or invent estimates without asking. Dates are YYYY-MM-DD." });
+      return reply({ protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0], capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } }, serverInfo: { name: "projecttodo", version: "0.2.0" }, instructions: "A to-do board shared with a person. Call get_playbook first: it says how the board is worked. In short: projects hold to-dos; a to-do without a parent is a main to-do and sits on the timeline by its dates. Lanes are statuses: draft (jotted down by the person, to discuss one group at a time), todo (Next), doing (Current), done, deferred (Later). After a draft is discussed, write its plan with write_doc, put the path in doc, set owner, estimate_days and planned dates, and move it on (set_current for the one that starts now). Setting status doing or done stamps the actual date and time of day; keep them current. Estimates are days, with fractions for hours (8 hours a day). A to-do is done only when everything under it is done. Never delete the person's draft lines or invent estimates without asking. Dates are YYYY-MM-DD." });
     }
     case "ping": return reply({});
     case "tools/list": return reply({ tools: MCP_TOOLS });

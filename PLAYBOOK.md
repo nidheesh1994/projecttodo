@@ -15,7 +15,11 @@ on the to-do board, call `get_playbook` and follow it.*
   `doing` (Current), `done`, `deferred` (Later).
 - **Owner**: `user` (the person), `assistant` (you), `both`, or none.
 - **Dates**: `planned_start` and `planned_end` are the estimate; `actual_start` and
-  `actual_done` are what happened. `estimate_days` is the size. All dates `YYYY-MM-DD`.
+  `actual_done` are what happened, each with a time of day beside it
+  (`actual_start_time`, `actual_done_time`, `HH:MM` local). `estimate_days` is the
+  size; under a day it is hours at 8 hours a day (0.375 = 3 h). Dates `YYYY-MM-DD`.
+  Setting a status to `doing` or `done` makes the server stamp the date and time it
+  needs, so the cheapest way to start or finish a to-do is the status change itself.
 - **Order**: siblings are sorted by `order` (10, 20, 30); `next_id` names the sibling
   that follows, which the timeline draws as an arrow.
 - **doc**: the path of a markdown file with the detailed plan, relative to the docs
@@ -76,9 +80,10 @@ When a to-do needs a plan (any main to-do; a child when it is big):
 
 ## While work happens
 
-- Starting a main to-do: `set_current`. Starting a child: `status: doing` and
-  `actual_start` today.
-- Finishing a child: `status: done` and `actual_done` today. Add a dated line to the
+- Starting a main to-do: `set_current`. Starting a child: `status: doing`; the server
+  stamps `actual_start` and its time. Do it the moment the work starts, not after.
+- Finishing a child: `status: done`; the server stamps `actual_done` and its time. Do it
+  the moment the work ends. Add a dated line to the
   document's **Progress** section when something notable happened (a decision, a
   surprise, a change of estimate).
 - Finishing a main to-do: only after every child is done; then `status: done` and
