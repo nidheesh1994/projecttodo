@@ -247,7 +247,7 @@ section { margin-top: 26px; }
 .cards { display: flex; flex-direction: column; gap: 8px; min-height: 48px; flex: 1; border-radius: 8px; }
 .lane.over .cards { outline: 2px dashed var(--accent); outline-offset: 3px; }
 .card { background: var(--surface); border-radius: 8px; padding: 9px 10px 8px; box-shadow: var(--shadow); cursor: pointer; min-width: 0; border-left: 3px solid transparent; }
-.card .card-top { cursor: pointer; }
+.card .card-top, .card .eyebrow { cursor: pointer; }
 .card.compact { padding: 6px 8px 6px 10px; }
 .card.compact .card-top { align-items: center; gap: 8px; }
 .card.compact .card-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 0; }
@@ -886,7 +886,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       "aria-label": `${it.title || "Untitled"}, ${ctx.lane.label}`,
     });
     // The header folds and opens the card; the rest of it opens the form.
-    card.addEventListener("click", e => { if (e.target.closest("button, a")) return; if (compact || e.target.closest(".card-top")) toggleFold(it.id, ctx.lane.key); else openEditor(it.id); });
+    card.addEventListener("click", e => { if (e.target.closest("button, a")) return; if (compact || e.target.closest(".card-top, .eyebrow")) toggleFold(it.id, ctx.lane.key); else openEditor(it.id); });
     card.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === card) openEditor(it.id); });
     card.addEventListener("dragstart", e => {
       state.dragId = it.id;
@@ -1688,7 +1688,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const compact = isFolded(it.id, lane.key);
     const card = el("article", { class: `card draft group${compact ? " compact" : ""}`, "data-id": it.id, draggable: state.readOnly ? null : "true", tabindex: "0", role: "button", "aria-label": `${it.title || "Untitled"}, ${lane.label}` });
     const open = () => openDraftModal({ groupId: it.id });
-    card.addEventListener("click", e => { if (e.target.closest("button, a, .note-check")) return; if (compact || e.target.closest(".card-top")) toggleFold(it.id, lane.key); else open(); });
+    card.addEventListener("click", e => { if (e.target.closest("button, a, .note-check")) return; if (compact || e.target.closest(".card-top, .eyebrow")) toggleFold(it.id, lane.key); else open(); });
     card.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === card) open(); });
     if (!state.readOnly) {
       card.addEventListener("dragstart", e => { state.dragId = it.id; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", it.id); } catch (err) { /* older engines */ } card.classList.add("dragging"); });
