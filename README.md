@@ -134,12 +134,6 @@ estimate in days (one day if none). Deleting a parent moves its children up one 
 | `GET /api/events` | | server-sent `change` events |
 | `POST /mcp` | JSON-RPC | the MCP endpoint |
 
-## Screenshots
-
-`docs/screenshots/take.mjs` takes the README screenshots with a headless Google Chrome
-over the DevTools protocol, at twice the pixel density, against a ProjectTodo serving
-sample data: `node docs/screenshots/take.mjs http://localhost:3005`.
-
 ## License
 
 MIT.

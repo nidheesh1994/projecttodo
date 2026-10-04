@@ -244,7 +244,8 @@ section { margin-top: 26px; }
 .lane { background: var(--surface-2); border-radius: 10px; padding: 8px; min-width: 0; display: flex; flex-direction: column; }
 .lane-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 8px; }
 .lane-ctl { display: flex; align-items: center; gap: 4px; }
-.lane-ctl .icon-btn:not(.tog) { font-size: 18px; line-height: 1; padding: 0 6px 2px; }
+.lane-ctl .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; }
+.lane-ctl .icon-btn:not(.tog) { font-size: 18px; line-height: 1; padding-bottom: 2px; }
 .lane-title { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; }
 .lane-title .n { font-family: var(--font-mono); color: var(--muted); font-weight: 500; margin-left: 7px; letter-spacing: 0; }
 .cards { display: flex; flex-direction: column; gap: 12px; min-height: 48px; flex: 1; border-radius: 8px; }
@@ -271,7 +272,6 @@ section { margin-top: 26px; }
 .ctl { display: flex; gap: 0; flex-shrink: 0; }
 .icon-btn { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 2px 5px; border-radius: 4px; line-height: 1.2; font-size: 13px; }
 .icon-btn:hover { background: var(--surface-2); color: var(--fg); }
-.icon-btn.tog { font-size: 12px; margin-left: -4px; }
 .meta { display: flex; flex-wrap: wrap; gap: 5px 8px; margin-top: 6px; font-size: 12px; color: var(--muted); font-family: var(--font-mono); align-items: center; font-variant-numeric: tabular-nums; }
 .chip { display: inline-block; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); font-family: var(--font-ui); font-size: 11.5px; color: var(--fg); }
 .chip.owner-assistant { background: var(--accent-soft); border-color: transparent; }
@@ -896,6 +896,12 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (y < b.top + b.height / 2) return cards[best].dataset.id;
     return cards[best + 1] ? cards[best + 1].dataset.id : null;
   }
+  // A chevron drawn as a path, so it sits centred in its button whatever the font does with ⌃ and ⌄.
+  function chevron(dir) {
+    const svg = svgEl("svg", { viewBox: "0 0 16 16", width: "14", height: "14", "aria-hidden": "true" });
+    svg.append(svgEl("path", { d: dir === "up" ? "M3.5 10.5 8 6l4.5 4.5" : "M3.5 5.5 8 10l4.5-4.5", fill: "none", stroke: "currentColor", "stroke-width": "1.8", "stroke-linecap": "round", "stroke-linejoin": "round" }));
+    return svg;
+  }
   function renderBoard(idx) {
     const board = $("#board-lanes");
     board.replaceChildren();
@@ -911,7 +917,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       const head = el("div", { class: "lane-head" },
         el("div", { class: "lane-title" }, lane.label, nEl),
         el("div", { class: "lane-ctl" },
-          laneIds.length ? el("button", { class: "icon-btn tog", type: "button", title: anyOpen ? `Fold every card in ${lane.label}` : `Open every card in ${lane.label}`, "aria-label": anyOpen ? "Fold all" : "Open all", onclick: () => foldLane(lane.key, anyOpen, laneIds) }, anyOpen ? "⌃" : "⌄") : null,
+          laneIds.length ? el("button", { class: "icon-btn tog", type: "button", title: anyOpen ? `Fold every card in ${lane.label}` : `Open every card in ${lane.label}`, "aria-label": anyOpen ? "Fold all" : "Open all", onclick: () => foldLane(lane.key, anyOpen, laneIds) }, chevron(anyOpen ? "up" : "down")) : null,
           state.readOnly ? null : el("button", { class: "icon-btn", type: "button", title: `Add a to-do to ${lane.label}`, "aria-label": `Add a to-do to ${lane.label}`, onclick: () => lane.key === "draft" ? openDraftModal({}) : openEditor(null, { status: lane.key }) }, "+")));
       counts[lane.key] = inLane.length;
       nEl.textContent = String(inLane.length);
