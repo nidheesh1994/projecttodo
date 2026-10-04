@@ -1,0 +1,1589 @@
+<title>ProjectTodo</title>
+<!--
+ProjectTodo (README.md). The rows live in the data folder's todos.json, served and written by
+server.mjs; an assistant reads and writes them over MCP (mcp.mjs, or POST /mcp).
+
+Pages: /  the projects;  /p/<project>  a project's board;  /p/<project>/tree  its timeline.
+
+A project: { id, name, description, current_id (the main to-do being worked on), created_at, updated_at, version }
+A to-do:
+{
+  id, project_id, title, notes,
+  parent_id:     string | null     null for a main to-do; a child sits under its parent (any depth)
+  next_id:       string | null     the sibling that comes after this one (siblings run left to right)
+  order:         number            position among its siblings, ascending (10, 20, 30 ...)
+  status:        "draft" | "todo" | "doing" | "done" | "deferred"
+                                   draft = jotted down to discuss (a draft group and its lines), todo = Next,
+                                   doing = Now, done = Done, deferred = Later
+  owner:         "user" | "assistant" | "both" | null
+  doc:           string | null     a markdown file, relative to the docs folder
+  estimate_days: number | null
+  planned_start, planned_end:  the estimated start and end, "YYYY-MM-DD" | null
+  actual_start, actual_done:   the actual start and end, "YYYY-MM-DD" | null
+  created_at, updated_at:      ISO 8601;   version: kept by the server, named by every write
+}
+Only main to-dos sit on the timeline's dates; their children are laid out under them, siblings left
+to right, children below their parent. A main to-do with no dates is drawn after the main to-do
+before it. Making a main to-do the project's current one starts it today; when it is done, its end
+is the end of the last finished to-do under it.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* A draft group: a title and its list of to-dos, in a card and in the modal that writes it. */
+.dm-dialog { width: min(640px, 100%); }
+/* One sheet, like a note: the title on top, the lines under it, no boxes. */
+.dm-sheet { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 12px; max-height: 60vh; overflow: auto; cursor: text; }
+.dm-title { display: block; width: 100%; font: 600 19px/1.3 var(--font-ui); color: var(--fg); background: transparent; border: 0; outline: none; padding: 0 0 8px; margin: 0; }
+.dm-title::placeholder { color: var(--muted); }
+.dm-list { margin: 0; padding: 0; }
+.dm-list .note-line { padding: 3px 0; gap: 10px; border-radius: 0; }
+.dm-list .note-line:focus-within { background: transparent; }
+.dm-list .note-text { font-size: 15px; line-height: 1.5; min-height: 22px; }
+.dm-list .note-check { margin-top: 4px; }
+.dm-help { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.card.group .notes { margin-top: 6px; }
+.card.group .note-line { padding: 3px 2px; }
+.card.group .note-text { font-size: 13px; cursor: text; }
+.note-line.done .note-text { text-decoration: line-through; color: var(--muted); }
+.note-check.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.note-check.static { cursor: default; }
+.notes { display: flex; flex-direction: column; gap: 1px; padding: 2px 0; }
+.note-line { display: flex; align-items: flex-start; gap: 8px; padding: 5px 6px; border-radius: 6px; min-width: 0; }
+.note-line:focus-within { background: var(--surface); }
+.note-check { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line-strong); background: transparent; flex: none; margin-top: 2px; cursor: pointer; display: grid; place-items: center; color: transparent; font-size: 11px; line-height: 1; padding: 0; }
+.note-check:hover { border-color: var(--accent); color: var(--accent); }
+.note-check:disabled { opacity: .5; cursor: default; }
+.note-main { flex: 1; min-width: 0; }
+.note-in { font-size: 11px; color: var(--muted); margin-bottom: 1px; }
+.note-text { outline: none; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; min-height: 20px; }
+.note-text:empty::before { content: attr(data-placeholder); color: var(--muted); }
+.note-more { opacity: 0; flex: none; }
+.note-line:hover .note-more, .note-line:focus-within .note-more { opacity: 1; }
+.notes-hint { color: var(--muted); font-size: 12px; padding: 6px 6px 2px; }
+/* The editor and the drawer set their own display, which would beat the browser's rule for the hidden attribute. */
+[hidden] { display: none !important; }
+/* Layout: one working page. A thin header strip, four board lanes, then the tree-and-timeline panel that scrolls sideways when it must. */
+:root {
+  --bg: #f2f4f7;
+  --surface: #ffffff;
+  --surface-2: #e7ebf0;
+  --fg: #171d26;
+  --muted: #5b6676;
+  --line: #d5dbe4;
+  --line-strong: #b4bdc9;
+  --accent: #0f8f80;
+  --accent-ink: #ffffff;
+  --accent-soft: #d4ede8;
+  --dull: #a3acb9;
+  --dull-soft: #dfe4ea;
+  --today: #d4582f;
+  --danger: #b93a2d;
+  --danger-ink: #ffffff;
+  --scrim: rgba(16, 22, 30, 0.45);
+  --shadow: 0 1px 2px rgba(23, 29, 38, 0.06), 0 8px 24px rgba(23, 29, 38, 0.08);
+  --font-ui: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1116; --surface: #161a21; --surface-2: #1e242d; --fg: #e6e9ee; --muted: #98a2b1;
+    --line: #27303c; --line-strong: #3a4553; --accent: #34c4ae; --accent-ink: #062722; --accent-soft: #173b36;
+    --dull: #5c6879; --dull-soft: #242b35; --today: #ff8b64; --danger: #ff7b6e; --danger-ink: #1a0b09;
+    --scrim: rgba(0, 0, 0, 0.6);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1116; --surface: #161a21; --surface-2: #1e242d; --fg: #e6e9ee; --muted: #98a2b1;
+  --line: #27303c; --line-strong: #3a4553; --accent: #34c4ae; --accent-ink: #062722; --accent-soft: #173b36;
+  --dull: #5c6879; --dull-soft: #242b35; --today: #ff8b64; --danger: #ff7b6e; --danger-ink: #1a0b09;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 14px; line-height: 1.45; }
+.wrap { max-width: 1440px; margin: 0 auto; padding-block: 14px 56px; padding-inline: 16px; }
+button { font: inherit; color: inherit; }
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); }
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+.brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.brand h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+.brand .sub { color: var(--muted); font-weight: 500; }
+.note { color: var(--muted); flex: 1 1 320px; min-width: 0; font-size: 13px; }
+.live { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dull); }
+.live.on .dot { background: var(--accent); }
+.live.err .dot { background: var(--danger); }
+.top-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn { border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg); border-radius: 6px; padding: 6px 11px; cursor: pointer; line-height: 1.3; }
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.05); background: var(--accent); }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+.btn.danger.solid { background: var(--danger); color: var(--danger-ink); }
+.btn[disabled] { opacity: 0.5; cursor: default; }
+.jump { display: flex; gap: 4px; }
+.jump a { color: var(--muted); text-decoration: none; padding: 5px 9px; border-radius: 6px; font-size: 13px; }
+.jump a:hover { background: var(--surface-2); color: var(--fg); }
+.jump a.current { background: var(--surface-2); color: var(--fg); font-weight: 600; }
+[data-view="board"] #timeline, [data-view="board"] #projects, [data-view="tree"] #board, [data-view="tree"] #projects, [data-view="projects"] #board, [data-view="projects"] #timeline { display: none; }
+[data-view="projects"] #add-root, [data-view="projects"] #nav-board, [data-view="projects"] #nav-tree { display: none; }
+[data-view="board"] #new-project, [data-view="tree"] #new-project { display: none; }
+.projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.project-card { display: block; background: var(--surface); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); color: inherit; text-decoration: none; border: 1px solid transparent; min-width: 0; }
+.project-card:hover, .project-card:focus-visible { border-color: var(--accent); outline: none; }
+.project-card .card-title { font-size: 16px; }
+.project-card .current-line { margin-top: 8px; font-size: 12.5px; color: var(--fg); }
+.project-card .current-line b { color: var(--today); font-weight: 600; }
+.f.check { flex-direction: row; align-items: center; gap: 8px; color: var(--fg); font-size: 13px; }
+.f.check input { width: auto; }
+.banner { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); color: var(--fg); border-left: 3px solid var(--today); font-size: 13px; }
+
+/* Sections */
+section { margin-top: 26px; }
+.sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.sec-head h2 { margin: 0; font-size: 16px; text-wrap: balance; }
+.sec-head p { margin: 0; color: var(--muted); font-size: 13px; flex: 1 1 280px; min-width: 0; }
+.counts { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* Board */
+.board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1040px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .board { grid-template-columns: 1fr; } }
+.lane { background: var(--surface-2); border-radius: 10px; padding: 8px; min-width: 0; display: flex; flex-direction: column; }
+.lane-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 8px; }
+.lane-title { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; }
+.lane-title .n { font-family: var(--font-mono); color: var(--muted); font-weight: 500; margin-left: 7px; letter-spacing: 0; }
+.cards { display: flex; flex-direction: column; gap: 8px; min-height: 48px; flex: 1; border-radius: 8px; }
+.lane.over .cards { outline: 2px dashed var(--accent); outline-offset: 3px; }
+.card { background: var(--surface); border-radius: 8px; padding: 9px 10px 8px; box-shadow: var(--shadow); cursor: pointer; min-width: 0; border-left: 3px solid transparent; }
+.card.compact { padding: 6px 8px 6px 10px; }
+.card.compact .card-top { align-items: center; gap: 8px; }
+.card.compact .card-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 0; }
+.card.compact .when { color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; }
+.card:hover { outline: 1px solid var(--line-strong); }
+.card.dragging { opacity: 0.45; }
+.card.child { border-left-color: var(--line-strong); }
+.card.done { border-left-color: var(--accent); }
+.card.doing { border-left-color: var(--accent); border-left-style: dashed; }
+.card[data-depth="1"] { margin-left: 14px; }
+.card[data-depth="2"] { margin-left: 28px; }
+.card[data-depth="3"] { margin-left: 42px; }
+.eyebrow { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-top { display: flex; align-items: flex-start; gap: 4px; }
+.card-title { font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; padding-top: 1px; }
+.card.deferred .card-title { color: var(--muted); font-weight: 500; }
+.ctl { display: flex; gap: 0; flex-shrink: 0; }
+.icon-btn { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 2px 5px; border-radius: 4px; line-height: 1.2; font-size: 13px; }
+.icon-btn:hover { background: var(--surface-2); color: var(--fg); }
+.icon-btn.tog { font-size: 12px; margin-left: -4px; }
+.meta { display: flex; flex-wrap: wrap; gap: 5px 8px; margin-top: 6px; font-size: 12px; color: var(--muted); font-family: var(--font-mono); align-items: center; font-variant-numeric: tabular-nums; }
+.chip { display: inline-block; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); font-family: var(--font-ui); font-size: 11.5px; color: var(--fg); }
+.chip.owner-assistant { background: var(--accent-soft); border-color: transparent; }
+.chip.owner-user { background: var(--surface-2); }
+.chip.current { color: var(--today); border-color: var(--today); font-weight: 600; }
+.chip.owner-both { background: linear-gradient(90deg, var(--surface-2) 50%, var(--accent-soft) 50%); border-color: transparent; }
+.docline { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); min-width: 0; }
+.docline code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.docline .icon-btn { font-size: 11.5px; font-family: var(--font-ui); }
+.notes { margin-top: 6px; color: var(--muted); font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.kids { margin-top: 6px; font-size: 11.5px; color: var(--muted); font-family: var(--font-mono); }
+.empty { color: var(--muted); font-size: 13px; padding: 10px 6px; }
+
+/* Timeline */
+.tl-panel { background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); overflow-x: auto; min-width: 0; }
+svg.tl { display: block; font-family: var(--font-ui); }
+.tl text { fill: var(--fg); font-size: 12px; }
+.tl .axis text { fill: var(--muted); font-size: 11px; font-family: var(--font-mono); }
+.tl .axis .month { font-family: var(--font-ui); font-weight: 600; fill: var(--fg); font-size: 12px; }
+.tl .grid { stroke: var(--line); stroke-width: 1; }
+.tl .weekend { fill: var(--surface-2); }
+.tl .edge { fill: none; stroke-width: 1.5; }
+.tl .edge.done { stroke: var(--accent); }
+.tl .edge.dull { stroke: var(--dull); }
+.tl .edge.unsched { stroke-dasharray: 3 4; opacity: 0.7; }
+.tl .edge.next { stroke-width: 1.5; opacity: 0.9; }
+.graph { position: relative; }
+.graph-edges { position: absolute; inset: 0; }
+.gbox { position: absolute; box-sizing: border-box; border-radius: 7px; padding: 5px 9px; background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--muted); cursor: pointer; overflow: hidden; }
+.gbox.main { border-width: 1.5px; }
+.gbox.main .gtitle { font-weight: 700; }
+.gbox.done { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); }
+.gbox.doing { border-color: var(--accent); border-left-width: 4px; color: var(--fg); }
+.gbox.deferred, .gbox.auto { border-style: dashed; }
+.gbox.current { outline: 2px solid var(--today); outline-offset: 2px; }
+.gbox:hover, .gbox:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gtitle { font-size: 12.5px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gbox.done .gtitle, .gbox.doing .gtitle { color: var(--fg); }
+.gmeta { font-family: var(--font-mono); font-size: 10.5px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl .band { fill: var(--surface-2); opacity: 0.45; }
+.tl .band-line { stroke: var(--line-strong); stroke-width: 1; opacity: 0.7; }
+.tl .lbl.root { font-weight: 700; }
+.tl .est { opacity: 0.6; }
+.tl marker.done path { fill: var(--accent); }
+.tl marker.dull path { fill: var(--dull); }
+.tl .bar.done { fill: var(--accent); }
+.tl .bar.doing { fill: url(#tl-stripes); stroke: var(--accent); stroke-width: 1; }
+.tl .bar.todo { fill: var(--dull); }
+.tl .bar.planned { fill: none; stroke: var(--dull); stroke-width: 1.5; }
+.tl .bar.deferred { fill: none; stroke: var(--dull); stroke-dasharray: 4 3; stroke-width: 1.5; }
+.tl .bar.unsched { fill: var(--dull-soft); stroke: var(--dull); stroke-dasharray: 4 3; stroke-width: 1; }
+.tl .bar.unsched.done { fill: var(--accent-soft); stroke: var(--accent); stroke-dasharray: none; }
+.tl .est { fill: var(--dull); }
+.tl .lbl { font-weight: 500; }
+.tl .lbl.dull { fill: var(--muted); font-weight: 400; }
+.tl .days { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; font-weight: 400; }
+.tl .today-line { stroke: var(--today); stroke-dasharray: 3 3; stroke-width: 1.5; }
+.tl .today-lbl { fill: var(--today); font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+.tl .node { cursor: pointer; }
+.tl .node:hover .bar, .tl .node:focus-visible .bar { filter: brightness(1.12); }
+.tl .node:focus-visible { outline: none; }
+.tl .node:focus-visible .bar { stroke: var(--fg); stroke-width: 2; }
+.tl .unsched-head { fill: var(--muted); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; }
+.tl .unsched-sub { fill: var(--muted); font-size: 11px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 20px; height: 10px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+.sw.done { background: var(--accent); }
+.sw.doing { background: repeating-linear-gradient(45deg, var(--accent) 0 3px, transparent 3px 6px); border: 1px solid var(--accent); }
+.sw.planned { border: 1.5px solid var(--dull); }
+.sw.deferred { border: 1.5px dashed var(--dull); }
+.sw.est { height: 4px; background: var(--dull); }
+.sw.today { width: 0; height: 12px; border-left: 2px dashed var(--today); border-radius: 0; }
+
+/* Editor dialog */
+.modal { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+.dialog { background: var(--surface); color: var(--fg); border-radius: 12px; width: min(680px, 100%); max-height: 100%; overflow: auto; padding: 18px; box-shadow: var(--shadow); }
+.dialog h3 { margin: 0 0 12px; font-size: 16px; }
+.form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.form .full { grid-column: 1 / -1; }
+.f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
+.f input, .f select, .f textarea { font: inherit; font-size: 14px; color: var(--fg); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 6px; padding: 7px 9px; min-width: 0; width: 100%; }
+.f input[type="date"], .f input[type="number"] { font-family: var(--font-mono); font-size: 13px; }
+.f textarea { min-height: 88px; resize: vertical; }
+.dialog-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+.dialog-actions .spacer { flex: 1; }
+.confirm { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+.confirm .q { flex: 1 1 200px; }
+@media (max-width: 560px) { .form { grid-template-columns: 1fr; } .form .full { grid-column: auto; } }
+
+/* Doc drawer */
+.drawer { position: fixed; top: env(safe-area-inset-top, 0px); right: 0; bottom: 0; width: min(760px, 100%); background: var(--surface); color: var(--fg); box-shadow: var(--shadow); z-index: 60; display: flex; flex-direction: column; border-left: 1px solid var(--line); }
+.drawer-head { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 8px 12px; align-items: center; flex-wrap: wrap; }
+.drawer-head code { font-size: 12.5px; flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+.drawer-head .snap { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.drawer-body { padding: 16px 22px calc(40px + env(safe-area-inset-bottom, 0px)); overflow: auto; line-height: 1.55; min-width: 0; }
+.md { max-width: 74ch; }
+.md h1 { font-size: 20px; } .md h2 { font-size: 17px; margin-top: 28px; } .md h3 { font-size: 15px; }
+.md h1, .md h2, .md h3 { text-wrap: balance; }
+.md pre { overflow-x: auto; background: var(--surface-2); padding: 10px 12px; border-radius: 6px; font-size: 12.5px; }
+.md code { font-size: 12.5px; background: var(--surface-2); padding: 0 4px; border-radius: 3px; }
+.md pre code { background: none; padding: 0; }
+.md table { border-collapse: collapse; display: block; overflow-x: auto; max-width: 100%; font-size: 13px; }
+.md th, .md td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+.md blockquote { border-left: 3px solid var(--line-strong); margin: 0; padding-left: 12px; color: var(--muted); }
+.md a { color: var(--accent); }
+.md input[type="checkbox"] { margin-right: 6px; }
+
+/* Toast */
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 70; max-width: calc(100% - 32px); box-shadow: var(--shadow); display: flex; gap: 10px; align-items: center; }
+.toast.err { background: var(--danger); color: var(--danger-ink); }
+.toast button { border: 0; background: transparent; color: inherit; cursor: pointer; font-weight: 600; padding: 0 2px; }
+@media (prefers-reduced-motion: no-preference) {
+  .toast { animation: rise 0.18s ease-out; }
+  @keyframes rise { from { transform: translate(-50%, 8px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>ProjectTodo</h1>
+      <span class="sub" id="brand-sub">Projects</span>
+    </div>
+    <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
+    <nav class="jump" aria-label="Pages"><a href="/" data-view="projects">Projects</a><a href="/" data-view="board" id="nav-board">Board</a><a href="/" data-view="tree" id="nav-tree">Timeline</a></nav>
+    <div class="top-actions">
+      <button class="btn primary" id="new-project" type="button">New project</button>
+      <button class="btn primary" id="add-root" type="button">New draft</button>
+    </div>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+
+  <section id="projects">
+    <div class="sec-head"><h2>Projects</h2><span class="counts" id="projects-counts"></span></div>
+    <div class="projects" id="project-cards"></div>
+  </section>
+
+  <section id="board">
+    <div class="sec-head"><h2>Board</h2><span class="counts" id="board-counts"></span></div>
+    <div class="board" id="board-lanes"></div>
+  </section>
+
+  <section id="timeline">
+    <div class="sec-head"><h2>Timeline</h2><span class="counts" id="tl-counts"></span></div>
+    <div class="tl-panel" id="tl-wrap"><div class="empty">Loading…</div></div>
+    <div class="legend" aria-label="Legend">
+      <span><i class="sw done"></i>Done</span>
+      <span><i class="sw doing"></i>In progress</span>
+      <span><i class="sw planned"></i>Not started</span>
+      <span><i class="sw deferred"></i>Later</span>
+      <span><i class="sw est"></i>Estimate, when the actual differs</span>
+      <span><i class="sw today"></i>Today</span>
+      <span>dashed: dates not set yet, placed after the one before</span>
+      <span>→ next</span>
+    </div>
+  </section>
+</div>
+
+<div class="modal" id="pm" hidden role="dialog" aria-modal="true" aria-labelledby="pm-heading">
+  <form class="dialog" id="pm-form" autocomplete="off">
+    <h3 id="pm-heading">New project</h3>
+    <div class="form">
+      <label class="f full">Name<input id="pm-name" type="text" maxlength="120" required></label>
+      <label class="f full">Description<input id="pm-desc" type="text" maxlength="300"></label>
+    </div>
+    <div class="dialog-actions">
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="pm-cancel">Cancel</button>
+      <button class="btn primary" type="submit" id="pm-save">Create</button>
+    </div>
+  </form>
+</div>
+
+<div class="modal" id="dm" hidden role="dialog" aria-modal="true" aria-labelledby="dm-heading">
+  <form class="dialog dm-dialog" id="dm-form" autocomplete="off">
+    <h3 id="dm-heading">New draft</h3>
+    <div class="dm-sheet" id="dm-sheet">
+      <input id="dm-name" class="dm-title" type="text" maxlength="200" placeholder="Title" aria-label="Title">
+      <div class="dm-list" id="dm-list"></div>
+    </div>
+    <p class="dm-help">Enter: next line · Tab: child · Shift+Tab: back out · Cmd+Enter: add</p>
+    <div class="confirm" id="dm-confirm" hidden>
+      <span class="q" id="dm-confirm-text"></span>
+      <button class="btn danger solid" type="button" id="dm-delete-yes">Yes, delete</button>
+      <button class="btn" type="button" id="dm-delete-no">Keep it</button>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn danger" type="button" id="dm-delete">Delete</button>
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="dm-cancel">Cancel</button>
+      <button class="btn primary" type="submit" id="dm-save">Add</button>
+    </div>
+  </form>
+</div>
+
+<div class="modal" id="editor" hidden role="dialog" aria-modal="true" aria-labelledby="ed-title">
+  <form class="dialog" id="ed-form" autocomplete="off">
+    <h3 id="ed-title">Edit to-do</h3>
+    <div class="form">
+      <label class="f full">Title<input id="ed-title-in" name="title" type="text" required maxlength="200"></label>
+      <label class="f full">Notes<textarea id="ed-notes" name="notes" maxlength="4000"></textarea></label>
+      <label class="f">Parent<select id="ed-parent" name="parent_id"></select></label>
+      <label class="f">Next to-do<select id="ed-next" name="next_id"></select></label>
+      <label class="f check" id="ed-current-wrap" hidden><input id="ed-current" type="checkbox"><span>Current main to-do (starts today)</span></label>
+      <label class="f">Status<select id="ed-status" name="status">
+        <option value="draft">Draft (to discuss)</option>
+        <option value="doing">Now (in progress)</option>
+        <option value="todo">Next (queued)</option>
+        <option value="done">Done</option>
+        <option value="deferred">Later (deferred)</option>
+      </select></label>
+      <label class="f">Owner<select id="ed-owner" name="owner">
+        <option value="">Not set</option>
+        <option value="user">You</option>
+        <option value="assistant">Assistant</option>
+        <option value="both">Both</option>
+      </select></label>
+      <label class="f">Estimate (days, if no dates)<input id="ed-est" name="estimate_days" type="number" min="0" step="0.5" inputmode="decimal"></label>
+      <label class="f full">Doc (repo-relative path)<input id="ed-doc" name="doc" type="text" placeholder="docs/marketplace-todo.md" maxlength="300"></label>
+      <label class="f">Estimated start<input id="ed-ps" name="planned_start" type="date"></label>
+      <label class="f">Estimated end<input id="ed-pe" name="planned_end" type="date"></label>
+      <label class="f">Actual start<input id="ed-as" name="actual_start" type="date"></label>
+      <label class="f">Actual end<input id="ed-ad" name="actual_done" type="date"></label>
+    </div>
+    <div class="confirm" id="ed-confirm" hidden>
+      <span class="q" id="ed-confirm-text"></span>
+      <button class="btn danger solid" type="button" id="ed-delete-yes">Yes, delete</button>
+      <button class="btn" type="button" id="ed-delete-no">Keep it</button>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn danger" type="button" id="ed-delete">Delete</button>
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="ed-cancel">Cancel</button>
+      <button class="btn primary" type="submit" id="ed-save">Save</button>
+    </div>
+  </form>
+</div>
+
+<div class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-labelledby="dr-path">
+  <div class="drawer-head">
+    <code id="dr-path"></code>
+    <span class="snap" id="dr-snap"></span>
+    <button class="btn" type="button" id="dr-copy">Copy path</button>
+    <button class="btn" type="button" id="dr-close">Close</button>
+  </div>
+  <div class="drawer-body"><div class="md" id="dr-body"></div></div>
+</div>
+
+<div class="toast" id="toast" hidden><span id="toast-text"></span><button type="button" id="toast-close" aria-label="Dismiss">x</button></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  const LANES = [
+    { key: "draft", label: "Drafts" },
+    { key: "doing", label: "Now" },
+    { key: "todo", label: "Next" },
+    { key: "done", label: "Done" },
+    { key: "deferred", label: "Later" },
+  ];
+  const STATUS_SET = new Set(LANES.map(l => l.key));
+  const OWNER_LABEL = { user: "You", assistant: "Assistant", both: "Both" };
+  const COL = "todos";
+
+  const state = {
+    db: null,
+    items: [],
+    loaded: false,
+    readOnly: false,
+    collapsed: new Set(),
+    project: null,       // the open project's id (from the path)
+    projects: [],
+    view: "projects",
+    expanded: new Set(),   // done cards opened out fully (per viewer)
+    snapshots: {},
+    dragId: null,
+    editing: null,
+    pending: 0,
+  };
+
+  // ---------- small helpers ----------
+  const $ = (sel, root = document) => root.querySelector(sel);
+  function el(tag, attrs = {}, ...kids) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === "class") n.className = v;
+      else if (k === "text") n.textContent = v;
+      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v === true ? "" : v);
+    }
+    for (const k of kids) if (k !== null && k !== undefined) n.append(k);
+    return n;
+  }
+  const SVGNS = "http://www.w3.org/2000/svg";
+  function svgEl(tag, attrs = {}) {
+    const n = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs)) if (v !== null && v !== undefined) n.setAttribute(k, v);
+    return n;
+  }
+  function svgText(x, y, text, attrs = {}) {
+    const t = svgEl("text", { x, y, ...attrs });
+    t.textContent = text;
+    return t;
+  }
+  const pad2 = n => String(n).padStart(2, "0");
+  const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+  const parseDay = s => {
+    if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+    const t = Date.parse(s + "T00:00:00Z");
+    return Number.isNaN(t) ? null : Math.round(t / 86400000);
+  };
+  const dayDate = n => new Date(n * 86400000);
+  const fmtShort = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  const fmtMonth = new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
+  const fmtDay = s => { const n = parseDay(s); return n === null ? "" : fmtShort.format(dayDate(n)); };
+  const nowIso = () => new Date().toISOString();
+  const num = v => (typeof v === "number" && Number.isFinite(v)) ? v : (v === null || v === undefined || v === "" ? Number.POSITIVE_INFINITY : (Number.isFinite(+v) ? +v : Number.POSITIVE_INFINITY));
+  const estOf = it => {
+    const v = it.estimate_days;
+    if (v !== null && v !== undefined && v !== "") { const n = +v; if (Number.isFinite(n) && n > 0) return n; }
+    const ps = parseDay(it.planned_start), pe = parseDay(it.planned_end);
+    return ps !== null && pe !== null && pe >= ps ? pe - ps + 1 : null;   // the estimated dates say how long
+  };
+  const statusOf = it => STATUS_SET.has(it.status) ? it.status : "todo";
+  const slug = t => (String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)) || "todo";
+  const newId = t => slug(t) + "-" + Math.random().toString(36).slice(2, 6);
+  const rangeText = (a, b, openWord) => {
+    const fa = fmtDay(a), fb = fmtDay(b);
+    if (fa && fb) return fa === fb ? fa : `${fa} to ${fb}`;
+    if (fa) return openWord ? `${fa} to ${openWord}` : `from ${fa}`;
+    if (fb) return `by ${fb}`;
+    return "";
+  };
+
+  // ---------- toast ----------
+  let toastTimer = null;
+  function toast(msg, isError = false) {
+    const t = $("#toast");
+    $("#toast-text").textContent = msg;
+    t.classList.toggle("err", isError);
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    if (!isError) toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+  }
+  $("#toast-close").addEventListener("click", () => { $("#toast").hidden = true; });
+
+  function setLive(mode, text) {
+    const l = $("#live");
+    l.classList.toggle("on", mode === "on");
+    l.classList.toggle("err", mode === "err");
+    $("#live-text").textContent = text;
+  }
+  function banner(text) {
+    const b = $("#banner");
+    b.hidden = !text;
+    b.textContent = text || "";
+  }
+
+  // ---------- per-viewer collapse memory ----------
+  try {
+    try { const ex = JSON.parse(localStorage.getItem("projecttodo-expanded") || "[]"); if (Array.isArray(ex)) state.expanded = new Set(ex); } catch (e) { /* fine */ }
+    const raw = localStorage.getItem("projecttodo-collapsed");
+    if (raw) JSON.parse(raw).forEach(id => state.collapsed.add(id));
+  } catch (e) { /* storage unavailable: fine */ }
+  function persistCollapsed() {
+    try { localStorage.setItem("projecttodo-collapsed", JSON.stringify([...state.collapsed])); } catch (e) { /* fine */ }
+    try { localStorage.setItem("projecttodo-expanded", JSON.stringify([...state.expanded])); } catch (e) { /* fine */ }
+  }
+
+  // ---------- tree ----------
+  function index() {
+    const byId = new Map(state.items.map(i => [i.id, i]));
+    const kids = new Map();
+    const parentOf = it => (it.parent_id && it.parent_id !== it.id && byId.has(it.parent_id)) ? it.parent_id : null;
+    for (const it of state.items) {
+      const p = parentOf(it);
+      if (!kids.has(p)) kids.set(p, []);
+      kids.get(p).push(it);
+    }
+    const cmp = (a, b) => (num(a.order) - num(b.order)) || String(a.created_at || "").localeCompare(String(b.created_at || "")) || String(a.title || "").localeCompare(String(b.title || ""));
+    for (const arr of kids.values()) arr.sort(cmp);
+    const rows = [];
+    const seen = new Set();
+    const walk = (p, depth, anc) => {
+      for (const it of (kids.get(p) || [])) {
+        if (seen.has(it.id)) continue;
+        seen.add(it.id);
+        rows.push({ it, depth, anc });
+        walk(it.id, depth + 1, anc.concat(it.id));
+      }
+    };
+    walk(null, 0, []);
+    // anything unreachable (a cycle) is shown as a root rather than hidden
+    for (const it of state.items.slice().sort(cmp)) if (!seen.has(it.id)) { seen.add(it.id); rows.push({ it, depth: 0, anc: [] }); }
+    return { byId, kids, rows, parentOf };
+  }
+  const siblingsOf = (idx, parentId) => (idx.kids.get(parentId || null) || []).slice();
+
+  // ---------- writes ----------
+  async function write(label, fn) {
+    if (!state.db) { toast("The shared store is not connected, so nothing was saved.", true); return false; }
+    state.pending++;
+    setLive("on", "saving");
+    try {
+      await fn();
+      return true;
+    } catch (e) {
+      const code = e && e.code ? e.code : "error";
+      toast(`${label} failed (${code}). ${e && e.message ? e.message : ""}`.trim(), true);
+      if (code === "invalid_argument" && !state.readOnly) {
+        // a well-formed write that the rules refuse: this viewer cannot write shared data
+      }
+      return false;
+    } finally {
+      state.pending--;
+      if (state.pending === 0 && state.db) setLive("on", "live");
+    }
+  }
+  async function applyPatches(patchMap) {
+    // one write at a time per document; sequential keeps it simple and well within budget
+    const stamp = nowIso();
+    for (const [id, patch] of patchMap) {
+      const ok = await write("Saving", () => state.db.collection(COL).doc(id).update({ ...patch, updated_at: stamp }));
+      if (!ok) return false;
+    }
+    return true;
+  }
+  function addPatch(map, id, patch) {
+    map.set(id, Object.assign(map.get(id) || {}, patch));
+  }
+  function statusDates(it, newStatus) {
+    const t = todayStr();
+    const p = {};
+    if (newStatus === "doing" && !it.actual_start) p.actual_start = t;
+    if (newStatus === "done") {
+      if (!it.actual_done) p.actual_done = t;
+      if (!it.actual_start) p.actual_start = t;
+    }
+    if (statusOf(it) === "done" && newStatus !== "done" && it.actual_done) p.actual_done = null;
+    return p;
+  }
+  function renumber(map, list) {
+    list.forEach((s, i) => { const o = (i + 1) * 10; if (s.order !== o) addPatch(map, s.id, { order: o }); });
+  }
+  async function dropItem(id, laneKey, beforeId) {
+    const idx = index();
+    const it = idx.byId.get(id);
+    if (!it) return;
+    const patches = new Map();
+    const was = statusOf(it);
+    if (was !== laneKey) {
+      const dates = {};
+      if (!idx.parentOf(it) && (laneKey === "todo" || laneKey === "doing") && !it.planned_start && !it.planned_end) Object.assign(dates, defaultDates(idx, it));
+      if (!idx.parentOf(it) && laneKey === "done" && !it.actual_done) { const last = latestDescendantDone(idx, it); if (last) dates.actual_done = last; }
+      addPatch(patches, it.id, { status: laneKey, ...statusDates(it, laneKey), ...dates });
+      // A draft group moves with its lines; a to-do dropped into Drafts takes the children that shared its status.
+      if (was === "draft" || laneKey === "draft") for (const r of idx.rows.filter(r => r.anc.includes(it.id) && statusOf(r.it) === was)) addPatch(patches, r.it.id, { status: laneKey, ...statusDates(r.it, laneKey) });
+    }
+    const parent = idx.parentOf(it);
+    const target = beforeId ? idx.byId.get(beforeId) : null;
+    if (target && target.id !== it.id) {
+      if (idx.parentOf(target) === parent) {
+        const sibs = siblingsOf(idx, parent).filter(s => s.id !== it.id);
+        const at = sibs.findIndex(s => s.id === target.id);
+        sibs.splice(at < 0 ? sibs.length : at, 0, it);
+        renumber(patches, sibs);
+      }
+    } else if (!target) {
+      const sibs = siblingsOf(idx, parent).filter(s => s.id !== it.id);
+      sibs.push(it);
+      renumber(patches, sibs);
+    }
+    if (!patches.size) return;
+    await applyPatches(patches);
+  }
+  async function moveSibling(id, dir) {
+    const idx = index();
+    const it = idx.byId.get(id);
+    if (!it) return;
+    const sibs = siblingsOf(idx, idx.parentOf(it));
+    const i = sibs.findIndex(s => s.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= sibs.length) { toast(dir < 0 ? "Already first among its siblings." : "Already last among its siblings."); return; }
+    [sibs[i], sibs[j]] = [sibs[j], sibs[i]];
+    const patches = new Map();
+    renumber(patches, sibs);
+    if (patches.size) await applyPatches(patches);
+  }
+  function toggleCollapse(id) {
+    if (state.collapsed.has(id)) state.collapsed.delete(id); else state.collapsed.add(id);
+    persistCollapsed();
+    render();
+  }
+
+  // ---------- clipboard ----------
+  async function copyText(text, node) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(`Copied ${text}`);
+    } catch (e) {
+      try {
+        const r = document.createRange();
+        r.selectNodeContents(node);
+        const s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(r);
+        toast("The clipboard is not available here. The path is selected: press Cmd+C or Ctrl+C.");
+      } catch (e2) {
+        toast(`Could not copy. The path is ${text}`, true);
+      }
+    }
+  }
+
+  // ---------- board ----------
+  function durations(it) {
+    const est = estOf(it);
+    let actual = null, open = false;
+    const a = parseDay(it.actual_start);
+    if (a !== null) {
+      let e = parseDay(it.actual_done);
+      if (e === null && statusOf(it) === "doing") { e = parseDay(todayStr()); open = true; }
+      if (e !== null) actual = Math.max(1, e - a + 1);
+    }
+    return { est, actual, open };
+  }
+  function docLine(path) {
+    const line = el("div", { class: "docline" });
+    const code = el("code", { text: path, title: path });
+    line.append(code);
+    line.append(el("button", { class: "icon-btn", type: "button", title: "Copy the path to the clipboard", onclick: e => { e.stopPropagation(); copyText(path, code); } }, "Copy"));
+    if (path) {
+      line.append(el("button", { class: "icon-btn", type: "button", title: "Read this file from the repository", onclick: e => { e.stopPropagation(); openDrawer(path); } }, "Read"));
+    }
+    return line;
+  }
+  function toggleExpanded(id) {
+    if (state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
+    persistCollapsed();
+    render();
+  }
+  function renderCard(it, idx, ctx) {
+    const st = statusOf(it);
+    const kids = idx.kids.get(it.id) || [];
+    const collapsed = state.collapsed.has(it.id);
+    // A done card is one row (the title and when it finished) until its arrow opens it out.
+    const compact = ctx.lane.key === "done" && !state.expanded.has(it.id);
+    const card = el("article", {
+      class: `card ${st}${ctx.indent ? " child" : ""}${compact ? " compact" : ""}`,
+      "data-id": it.id,
+      "data-depth": String(Math.min(ctx.indent, 3)),
+      draggable: state.readOnly ? null : "true",
+      tabindex: "0",
+      role: "button",
+      "aria-label": `${it.title || "Untitled"}, ${ctx.lane.label}`,
+    });
+    card.addEventListener("click", e => { if (e.target.closest("button, a")) return; openEditor(it.id); });
+    card.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === card) openEditor(it.id); });
+    card.addEventListener("dragstart", e => {
+      state.dragId = it.id;
+      try { e.dataTransfer.setData("text/plain", it.id); e.dataTransfer.effectAllowed = "move"; } catch (err) { /* fine */ }
+      requestAnimationFrame(() => card.classList.add("dragging"));
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      state.dragId = null;
+      document.querySelectorAll(".lane.over").forEach(l => l.classList.remove("over"));
+    });
+
+    if (it.parent_id && !ctx.parentInLane && !compact) {
+      const p = idx.byId.get(it.parent_id);
+      if (p) card.append(el("div", { class: "eyebrow", text: `in ${p.title || "untitled"}` }));
+    }
+    const top = el("div", { class: "card-top" });
+    if (ctx.descInLane > 0) {
+      top.append(el("button", { class: "icon-btn tog", type: "button", title: collapsed ? `Show ${ctx.descInLane} hidden` : "Hide children", "aria-expanded": String(!collapsed), onclick: e => { e.stopPropagation(); toggleCollapse(it.id); } }, collapsed ? `▸ ${ctx.descInLane}` : "▾"));
+    }
+    top.append(el("div", { class: "card-title", text: it.title || "Untitled" }));
+    if (compact) {
+      top.append(
+        el("span", { class: "when", text: it.actual_done ? fmtDay(it.actual_done) : "" }),
+        el("button", { class: "icon-btn tog", type: "button", title: "Open the card out", "aria-label": "Open the card out", "aria-expanded": "false", onclick: e => { e.stopPropagation(); toggleExpanded(it.id); } }, "⌄"),
+      );
+      card.append(top);
+      return card;
+    }
+    const ctl = el("div", { class: "ctl" });
+    if (ctx.lane.key === "done") ctl.append(el("button", { class: "icon-btn tog", type: "button", title: "Fold the card to one row", "aria-label": "Fold the card", "aria-expanded": "true", onclick: e => { e.stopPropagation(); toggleExpanded(it.id); } }, "⌃"));
+    if (!state.readOnly) {
+      ctl.append(
+        el("button", { class: "icon-btn", type: "button", title: "Move up among its siblings", "aria-label": "Move up", onclick: e => { e.stopPropagation(); moveSibling(it.id, -1); } }, "↑"),
+        el("button", { class: "icon-btn", type: "button", title: "Move down among its siblings", "aria-label": "Move down", onclick: e => { e.stopPropagation(); moveSibling(it.id, 1); } }, "↓"),
+        el("button", { class: "icon-btn", type: "button", title: "Add a child to-do", "aria-label": "Add a child", onclick: e => { e.stopPropagation(); openDraftModal({ parentId: it.id }); } }, "+"),
+      );
+    }
+    top.append(ctl);
+    card.append(top);
+
+    const meta = el("div", { class: "meta" });
+    const proj = currentProject();
+    if (proj && proj.current_id === it.id) meta.append(el("span", { class: "chip current", text: "Current" }));
+    if (it.owner && OWNER_LABEL[it.owner]) meta.append(el("span", { class: `chip owner-${it.owner}`, text: OWNER_LABEL[it.owner] }));
+    const d = durations(it);
+    if (d.est !== null) meta.append(el("span", { text: `est ${d.est} d` }));
+    if (d.actual !== null) meta.append(el("span", { text: d.open ? `${d.actual} d so far` : `${d.actual} d` }));
+    if (it.actual_start || it.actual_done) meta.append(el("span", { text: rangeText(it.actual_start, it.actual_done, st === "doing" ? "today" : "") }));
+    if (it.planned_start || it.planned_end) meta.append(el("span", { text: "est " + rangeText(it.planned_start, it.planned_end) }));
+    if (meta.childNodes.length) card.append(meta);
+    if (it.doc) card.append(docLine(String(it.doc)));
+    if (it.notes) card.append(el("div", { class: "notes", text: String(it.notes) }));
+    if (kids.length) {
+      const done = kids.filter(k => statusOf(k) === "done").length;
+      card.append(el("div", { class: "kids", text: `${done} of ${kids.length} children done` }));
+    }
+    return card;
+  }
+  function renderBoard(idx) {
+    const board = $("#board-lanes");
+    board.replaceChildren();
+    const counts = {};
+    for (const lane of LANES) {
+      const laneEl = el("div", { class: "lane", "data-lane": lane.key });
+      const nEl = el("span", { class: "n" });
+      const head = el("div", { class: "lane-head" },
+        el("div", { class: "lane-title" }, lane.label, nEl),
+        state.readOnly ? null : el("button", { class: "icon-btn", type: "button", title: `Add a to-do to ${lane.label}`, "aria-label": `Add a to-do to ${lane.label}`, onclick: () => lane.key === "draft" ? openDraftModal({}) : openEditor(null, { status: lane.key }) }, "+"));
+      const cards = el("div", { class: "cards" });
+      // A to-do under a draft group is shown inside the group's card, whatever its own status.
+      const inGroup = r => r.anc.some(a => statusOf(idx.byId.get(a) || {}) === "draft");
+      const inLane = idx.rows.filter(r => statusOf(r.it) === lane.key && !inGroup(r));
+      const inLaneIds = new Set(inLane.map(r => r.it.id));
+      counts[lane.key] = inLane.length;
+      nEl.textContent = String(inLane.length);
+      for (const r of inLane) {
+        if (r.anc.some(a => state.collapsed.has(a) && inLaneIds.has(a))) continue;
+        const parentInLane = !!(r.it.parent_id && inLaneIds.has(r.it.parent_id));
+        const indent = r.anc.filter(a => inLaneIds.has(a)).length;
+        const descInLane = inLane.filter(x => x.anc.includes(r.it.id)).length;
+        cards.append(lane.key === "draft" ? renderDraftGroup(r.it, idx, lane) : renderCard(r.it, idx, { indent, parentInLane, descInLane, lane }));
+      }
+      if (!inLane.length) cards.append(el("div", { class: "empty", text: state.loaded ? `Nothing in ${lane.label}. Drop a card here or press + to add one.` : "Loading the shared to-dos…" }));
+      if (!state.readOnly) {
+        laneEl.addEventListener("dragover", e => { if (!state.dragId) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; laneEl.classList.add("over"); });
+        laneEl.addEventListener("dragleave", e => { if (!laneEl.contains(e.relatedTarget)) laneEl.classList.remove("over"); });
+        laneEl.addEventListener("drop", e => {
+          e.preventDefault();
+          laneEl.classList.remove("over");
+          let id = state.dragId;
+          if (!id) { try { id = e.dataTransfer.getData("text/plain"); } catch (err) { id = null; } }
+          state.dragId = null;
+          if (!id) return;
+          const cardEls = [...cards.querySelectorAll(".card")].filter(c => c.dataset.id !== id);
+          const before = cardEls.find(c => { const b = c.getBoundingClientRect(); return e.clientY < b.top + b.height / 2; });
+          dropItem(id, lane.key, before ? before.dataset.id : null);
+        });
+      }
+      laneEl.append(head, cards);
+      board.append(laneEl);
+    }
+    $("#board-counts").textContent = state.loaded ? LANES.map(l => `${counts[l.key]} ${l.label.toLowerCase()}`).join(" · ") : "";
+  }
+
+  // ---------- timeline ----------
+  function spans(it, today) {
+    const as = parseDay(it.actual_start), ad = parseDay(it.actual_done), ps = parseDay(it.planned_start), pe = parseDay(it.planned_end);
+    const est = estOf(it);
+    const st = statusOf(it);
+    let actual = null, open = false;
+    if (as !== null) {
+      let e = ad !== null ? ad : (st === "doing" ? today : as);
+      if (e < as) e = as;
+      if (ad === null && st === "doing") open = true;
+      actual = [as, e];
+    }
+    let plan = null;
+    if (ps !== null) {
+      let e = pe !== null ? pe : (est ? ps + Math.max(1, Math.round(est)) - 1 : ps);
+      if (e < ps) e = ps;
+      plan = [ps, e];
+    }
+    let estSpan = null;
+    const estStart = ps !== null ? ps : as;
+    if (est && estStart !== null) estSpan = [estStart, estStart + Math.max(1, Math.round(est)) - 1];
+    else if (plan && pe !== null) estSpan = plan;
+    if (!actual && !plan) return { unscheduled: true, est, start: null };
+    const start = actual ? actual[0] : plan[0];
+    const all = [].concat(actual || [], plan || [], estSpan || []);
+    return { unscheduled: false, actual, plan, est: estSpan, estDays: est, open, start, min: Math.min(...all), max: Math.max(...all) };
+  }
+  function daysText(g) {
+    const parts = [];
+    if (g.actual) { const n = g.actual[1] - g.actual[0] + 1; parts.push(g.open ? `${n} d so far` : `${n} d`); }
+    if (g.est) { const n = g.est[1] - g.est[0] + 1; parts.push(`est ${n} d`); }
+    else if (g.unscheduled && g.estDays) parts.push(`est ${g.estDays} d`);
+    return parts.join(" · ");
+  }
+  function truncate(s, max) {
+    s = String(s || "Untitled");
+    return s.length > max ? s.slice(0, Math.max(1, max - 1)).trimEnd() + "…" : s;
+  }
+  function tipText(it, g) {
+    const lines = [it.title || "Untitled", `${LANES.find(l => l.key === statusOf(it)).label}${it.owner && OWNER_LABEL[it.owner] ? " · " + OWNER_LABEL[it.owner] : ""}`];
+    if (it.planned_start || it.planned_end) lines.push(`Estimated: ${rangeText(it.planned_start, it.planned_end)}`);
+    if (it.actual_start || it.actual_done) lines.push(`Actual: ${rangeText(it.actual_start, it.actual_done, statusOf(it) === "doing" ? "today" : "")}`);
+    const est = estOf(it);
+    if (est) lines.push(`Estimate: ${est} d`);
+    if (g.actual) lines.push(`Took: ${g.actual[1] - g.actual[0] + 1} d${g.open ? " so far" : ""}`);
+    if (it.doc) lines.push(String(it.doc));
+    return lines.join("\n");
+  }
+  // ---------- dates and order ----------
+  const dayStr = n => dayDate(n).toISOString().slice(0, 10);
+  // Siblings in the order their next links say: a chain runs a → b → c, then the siblings nobody points to. A loop is cut where it closes.
+  function orderedKids(idx, parentId) {
+    const sibs = (idx.kids.get(parentId || null) || []);
+    const ids = new Set(sibs.map(x => x.id));
+    const nextOf = new Map(), hasPrev = new Set();
+    for (const x of sibs) if (x.next_id && ids.has(x.next_id) && x.next_id !== x.id && !hasPrev.has(x.next_id)) { nextOf.set(x.id, x.next_id); hasPrev.add(x.next_id); }
+    const out = [], placed = new Set();
+    const follow = start => { let cur = start; while (cur && !placed.has(cur.id)) { placed.add(cur.id); out.push(cur); cur = nextOf.has(cur.id) ? idx.byId.get(nextOf.get(cur.id)) : null; } };
+    for (const x of sibs) if (!hasPrev.has(x.id)) follow(x);
+    for (const x of sibs) if (!placed.has(x.id)) follow(x);
+    return out;
+  }
+  // The day the last finished to-do under this one ended, as YYYY-MM-DD, or null.
+  function latestDescendantDone(idx, it) {
+    let best = null;
+    for (const r of idx.rows) if (r.anc.includes(it.id) && statusOf(r.it) === "done") { const d = parseDay(r.it.actual_done); if (d !== null && (best === null || d > best)) best = d; }
+    return best === null ? null : dayStr(best);
+  }
+  // The days of each main to-do, in order: its actual span (to today while it runs; to the last finished child when it is done), else its
+  // estimated span, else it starts the day after the estimated end of the main to-do before it and lasts its estimate in days (one day if none).
+  function mainSpans(idx, mains, today) {
+    const out = [];
+    let prevEnd = null;
+    for (const it of mains) {
+      const as = parseDay(it.actual_start), ad = parseDay(it.actual_done), ps = parseDay(it.planned_start), pe = parseDay(it.planned_end);
+      const est = Math.max(1, Math.round(estOf(it) || 1));
+      const st = statusOf(it);
+      const estSpan = ps !== null ? [ps, Math.max(ps, pe !== null ? pe : ps + est - 1)] : null;
+      let span;
+      if (as !== null) {
+        const lastKid = parseDay(latestDescendantDone(idx, it));
+        let e = ad !== null ? ad : (st === "done" ? (lastKid !== null ? lastKid : as) : Math.max(as, today));
+        if (e < as) e = as;
+        span = { start: as, end: e, kind: "actual", open: ad === null && st !== "done" };
+      } else if (estSpan) {
+        span = { start: estSpan[0], end: estSpan[1], kind: "planned", open: false };
+      } else {
+        const start = prevEnd !== null ? prevEnd + 1 : today;
+        span = { start, end: start + est - 1, kind: "auto", open: false };
+      }
+      span.est = estSpan;
+      prevEnd = estSpan ? estSpan[1] : span.end;
+      out.push({ it, ...span });
+    }
+    return out;
+  }
+  // The estimated dates a main to-do gets when it has none: after the one before it.
+  function defaultDates(idx, it) {
+    const mains = orderedKids(idx, null).filter(m => statusOf(m) !== "draft" || m.id === it.id);
+    const s = mainSpans(idx, mains, parseDay(todayStr())).find(x => x.it.id === it.id);
+    return s ? { planned_start: dayStr(s.start), planned_end: dayStr(s.end) } : {};
+  }
+
+  // ---------- the timeline: dates along the top; each main to-do spans its days, its tree hangs under it ----------
+  function renderTimeline(idx) {
+    const wrap = $("#tl-wrap");
+    const isDraft = x => statusOf(x) === "draft";
+    const okId = new Set(idx.rows.filter(r => !isDraft(r.it) && !r.anc.some(a => isDraft(idx.byId.get(a) || {}))).map(r => r.it.id));
+    const kidsOf = id => orderedKids(idx, id).filter(k => okId.has(k.id));
+    const mains = kidsOf(null);
+    if (!mains.length) {
+      wrap.replaceChildren(el("div", { class: "empty", text: state.loaded ? "No main to-dos yet. Move a draft to Next or Now and it appears here." : "Loading…" }));
+      $("#tl-counts").textContent = "";
+      return;
+    }
+    const today = parseDay(todayStr());
+    const project = currentProject();
+    const currentId = project ? project.current_id : null;
+    const mainList = mainSpans(idx, mains, today);
+    let min = today, max = today;
+    for (const sp of mainList) { min = Math.min(min, sp.start, sp.est ? sp.est[0] : sp.start); max = Math.max(max, sp.end, sp.est ? sp.est[1] : sp.end); }
+    min -= 1; max += 2;
+    // how many columns wide and rows tall each tree is: siblings side by side, children below
+    const size = new Map();
+    const measure = id => { let w = 0, h = 0; for (const k of kidsOf(id)) { const sz = measure(k.id); w += sz.w; h = Math.max(h, sz.h); } const out = { w: Math.max(1, w), h: 1 + h }; size.set(id, out); return out; };
+    for (const m of mains) measure(m.id);
+    // a day under a main to-do is as wide as its share of the tree needs
+    const SLOT = 156, MINDAY = 30, BOX_H = 42, ROW_H = 62, GAP = 8, AXIS_H = 48, PAD = 16, FOOT = 22;
+    const dayW = new Map();
+    for (let d = min; d <= max; d++) dayW.set(d, MINDAY);
+    for (const sp of mainList) { const n = sp.end - sp.start + 1; const need = Math.ceil(size.get(sp.it.id).w / n) * SLOT; for (let d = sp.start; d <= sp.end; d++) dayW.set(d, Math.max(dayW.get(d), need)); }
+    const X = new Map();
+    let x = PAD;
+    for (let d = min; d <= max + 1; d++) { X.set(d, x); x += dayW.get(d) || MINDAY; }
+    const chartRight = x;
+    // main to-dos that share days go on separate rows of lanes
+    const lanes = [];
+    for (const sp of mainList.slice().sort((a, b) => a.start - b.start || a.end - b.end)) {
+      let li = lanes.findIndex(l => l.spans.every(([a, b]) => sp.end < a || sp.start > b));
+      if (li < 0) { lanes.push({ spans: [], h: 0 }); li = lanes.length - 1; }
+      lanes[li].spans.push([sp.start, sp.end]);
+      lanes[li].h = Math.max(lanes[li].h, size.get(sp.it.id).h);
+      sp.lane = li;
+    }
+    const laneY = [];
+    let y = AXIS_H + 12;
+    for (const l of lanes) { laneY.push(y); y += l.h * ROW_H + 14; }
+    const height = y + FOOT, width = chartRight + PAD;
+    const boxes = [];
+    const placeTree = (id, x0, w, row, yTop, depth, sp) => {
+      boxes.push({ id, x: x0, y: yTop + row * ROW_H, w, depth, sp });
+      const kids = kidsOf(id);
+      if (!kids.length) return;
+      const unit = w / size.get(id).w;
+      let cx = x0;
+      for (const k of kids) { const kw = size.get(k.id).w * unit; placeTree(k.id, cx, kw, row + 1, yTop, depth + 1, null); cx += kw; }
+    };
+    for (const sp of mainList) placeTree(sp.it.id, X.get(sp.start), X.get(sp.end + 1) - X.get(sp.start), 0, laneY[sp.lane], 0, sp);
+    const boxOf = new Map(boxes.map(b => [b.id, b]));
+
+    const graph = el("div", { class: "graph", style: `width:${width}px;height:${height}px` });
+    const svg = svgEl("svg", { class: "tl graph-edges", width, height, viewBox: `0 0 ${width} ${height}`, "aria-hidden": "true" });
+    const defs = svgEl("defs");
+    for (const [name, cls] of [["arrow-done", "done"], ["arrow-dull", "dull"]]) {
+      const marker = svgEl("marker", { id: name, class: cls, viewBox: "0 0 10 10", refX: "9", refY: "5", markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse" });
+      marker.append(svgEl("path", { d: "M0,1 L9,5 L0,9 z" }));
+      defs.append(marker);
+    }
+    svg.append(defs);
+    for (let d = min; d <= max; d++) {
+      const dow = dayDate(d).getUTCDay();
+      if (dow === 0 || dow === 6) svg.append(svgEl("rect", { class: "weekend", x: X.get(d), y: AXIS_H, width: dayW.get(d), height: height - AXIS_H - FOOT }));
+    }
+    const axis = svgEl("g", { class: "axis" });
+    for (let d = min; d <= max; d++) {
+      const dt = dayDate(d), x0 = X.get(d), w = dayW.get(d);
+      axis.append(svgEl("line", { class: "grid", x1: x0, y1: AXIS_H - 6, x2: x0, y2: height - FOOT }));
+      const dayN = dt.getUTCDate();
+      if (w >= 22 || dayN % 2 === 1) axis.append(svgText(x0 + w / 2, AXIS_H - 12, String(dayN), { "text-anchor": "middle" }));
+      if (d === min || dayN === 1) axis.append(svgText(x0 + 4, 16, fmtMonth.format(dt), { class: "month" }));
+    }
+    axis.append(svgEl("line", { class: "grid", x1: PAD, y1: AXIS_H, x2: chartRight, y2: AXIS_H }));
+    svg.append(axis);
+    // the estimate under a main to-do whose actual days differ from it
+    for (const sp of mainList) {
+      if (!sp.est || sp.kind !== "actual" || (sp.est[0] === sp.start && sp.est[1] === sp.end)) continue;
+      svg.append(svgEl("rect", { class: "est", x: X.get(sp.est[0]), y: laneY[sp.lane] + BOX_H + 2, width: X.get(sp.est[1] + 1) - X.get(sp.est[0]) - GAP, height: 3, rx: 1.5 }));
+    }
+    // edges: a parent to each child, top to bottom; a to-do to its next one, left to right
+    for (const b of boxes) {
+      const it = idx.byId.get(b.id);
+      const pb = idx.parentOf(it) ? boxOf.get(idx.parentOf(it)) : null;
+      if (pb) svg.append(svgEl("path", { class: "edge " + (statusOf(it) === "done" ? "done" : "dull"), d: `M${b.x + 14},${pb.y + BOX_H} V${b.y}` }));
+      const nb = it.next_id ? boxOf.get(it.next_id) : null;
+      if (nb && nb.y === b.y && nb.x >= b.x + b.w - GAP) {
+        const cls = statusOf(it) === "done" && statusOf(idx.byId.get(it.next_id)) === "done" ? "done" : "dull";
+        svg.append(svgEl("path", { class: `edge next ${cls}`, d: `M${b.x + b.w - GAP},${b.y + BOX_H / 2} H${nb.x}`, "marker-end": `url(#arrow-${cls})` }));
+      }
+    }
+    const tx = X.get(today) + dayW.get(today) / 2;
+    svg.append(svgEl("line", { class: "today-line", x1: tx, y1: AXIS_H - 4, x2: tx, y2: height - FOOT + 4 }));
+    svg.append(svgText(tx, height - 6, "Today", { class: "today-lbl", "text-anchor": "middle" }));
+    graph.append(svg);
+
+    for (const b of boxes) {
+      const it = idx.byId.get(b.id), st = statusOf(it), sp = b.sp;
+      const d = durations(it);
+      let meta;
+      if (sp) {
+        const dates = sp.start === sp.end ? fmtDay(dayStr(sp.start)) : `${fmtDay(dayStr(sp.start))} to ${fmtDay(dayStr(sp.end))}`;
+        meta = [dates + (sp.open ? " so far" : "") + (sp.kind === "auto" ? " (not set)" : ""), sp.kind === "actual" ? `${sp.end - sp.start + 1} d` : "", d.est !== null ? `est ${d.est} d` : ""].filter(Boolean).join(" · ");
+      } else {
+        meta = [
+          it.actual_start || it.actual_done ? rangeText(it.actual_start, it.actual_done, st === "doing" ? "today" : "") : (it.planned_start || it.planned_end ? "est " + rangeText(it.planned_start, it.planned_end) : ""),
+          d.actual !== null ? (d.open ? `${d.actual} d so far` : `${d.actual} d`) : (d.est !== null ? `est ${d.est} d` : ""),
+        ].filter(Boolean).join(" · ");
+      }
+      const g = sp ? { actual: sp.kind === "actual" ? [sp.start, sp.end] : null, open: sp.open } : spans(it, today);
+      const node = el("div", {
+        class: `gbox ${st}${b.depth === 0 ? " main" : ""}${sp && sp.kind === "auto" ? " auto" : ""}${currentId === it.id ? " current" : ""}`,
+        style: `left:${b.x}px;top:${b.y}px;width:${Math.max(36, b.w - GAP)}px;height:${BOX_H}px`, tabindex: "0", role: "button", title: tipText(it, g),
+      }, el("div", { class: "gtitle", text: it.title || "Untitled" }), el("div", { class: "gmeta", text: meta }));
+      node.addEventListener("click", () => openEditor(it.id));
+      node.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEditor(it.id); } });
+      graph.append(node);
+    }
+    wrap.replaceChildren(graph);
+    const noDates = mainList.filter(sp => sp.kind === "auto").length;
+    $("#tl-counts").textContent = `${boxes.length} items · ${mains.length} main · ${noDates} without dates`;
+  }
+
+  // ---------- editor ----------
+  const F = {
+    title: $("#ed-title-in"), notes: $("#ed-notes"), parent: $("#ed-parent"), next: $("#ed-next"), status: $("#ed-status"), owner: $("#ed-owner"),
+    est: $("#ed-est"), doc: $("#ed-doc"), ps: $("#ed-ps"), pe: $("#ed-pe"), as: $("#ed-as"), ad: $("#ed-ad"),
+  };
+  function openEditor(id, preset = {}) {
+    const idx = index();
+    const it = id ? idx.byId.get(id) : null;
+    if (id && !it) { toast("That to-do is no longer in the store.", true); return; }
+    state.editing = { id: it ? it.id : null, isNew: !it, snapshot: it ? { ...it } : null };
+    $("#ed-title").textContent = it ? "Edit to-do" : (preset.parent_id ? "New child to-do" : "New to-do");
+    const v = it || { title: "", notes: "", parent_id: preset.parent_id || null, next_id: null, status: preset.status || "todo", owner: null, doc: null, estimate_days: null, planned_start: null, planned_end: null, actual_start: null, actual_done: null };
+    F.title.value = v.title || "";
+    F.notes.value = v.notes || "";
+    F.status.value = statusOf(v);
+    F.owner.value = v.owner && OWNER_LABEL[v.owner] ? v.owner : "";
+    F.est.value = estOf(v) === null ? "" : String(estOf(v));
+    F.doc.value = v.doc || "";
+    F.ps.value = parseDay(v.planned_start) === null ? "" : v.planned_start;
+    F.pe.value = parseDay(v.planned_end) === null ? "" : v.planned_end;
+    F.as.value = parseDay(v.actual_start) === null ? "" : v.actual_start;
+    F.ad.value = parseDay(v.actual_done) === null ? "" : v.actual_done;
+    // parent options: every item in tree order, minus this one and its descendants
+    F.parent.replaceChildren(el("option", { value: "", text: "None (a root to-do)" }));
+    for (const r of idx.rows) {
+      if (it && (r.it.id === it.id || r.anc.includes(it.id))) continue;
+      F.parent.append(el("option", { value: r.it.id, text: `${"— ".repeat(r.depth)}${r.it.title || "Untitled"}` }));
+    }
+    F.parent.value = v.parent_id && idx.byId.has(v.parent_id) && (!it || v.parent_id !== it.id) ? v.parent_id : "";
+    fillNextOptions(idx, F.parent.value || null, it ? it.id : null, v.next_id || null);
+    const project = currentProject();
+    $("#ed-current-wrap").hidden = !it || !!F.parent.value || !project;
+    $("#ed-current").checked = !!(it && project && project.current_id === it.id);
+    $("#ed-delete").hidden = !it || state.readOnly;
+    $("#ed-confirm").hidden = true;
+    $("#ed-save").disabled = state.readOnly;
+    $("#editor").hidden = false;
+    setTimeout(() => F.title.focus(), 0);
+  }
+  // The next to-do is one of the same siblings: it sits to the right of this one in the graph.
+  function fillNextOptions(idx, parentId, selfId, current) {
+    F.next.replaceChildren(el("option", { value: "", text: "None" }));
+    for (const s of siblingsOf(idx, parentId)) {
+      if (s.id === selfId) continue;
+      F.next.append(el("option", { value: s.id, text: s.title || "Untitled" }));
+    }
+    F.next.value = current && idx.byId.has(current) && [...F.next.options].some(o => o.value === current) ? current : "";
+  }
+  F.parent.addEventListener("change", () => { fillNextOptions(index(), F.parent.value || null, state.editing ? state.editing.id : null, null); $("#ed-current-wrap").hidden = !state.editing || !state.editing.id || !!F.parent.value || !currentProject(); });
+  const currentProject = () => state.projects.find(p => p.id === state.project) || null;
+  // The project's current main to-do: the server starts it today when it is set.
+  async function setCurrent(id) {
+    const project = currentProject();
+    if (!project) return false;
+    return write("Setting the current to-do", () => call("PATCH", `/api/projects/${encodeURIComponent(project.id)}`, { if_version: project.version, data: { current_id: id } }));
+  }
+  function closeEditor() { $("#editor").hidden = true; state.editing = null; }
+  function readForm() {
+    const dateOr = s => (parseDay(s) === null ? null : s);
+    const estRaw = F.est.value.trim();
+    const estN = estRaw === "" ? null : +estRaw;
+    return {
+      title: F.title.value.trim(),
+      notes: F.notes.value.trim(),
+      parent_id: F.parent.value || null,
+      next_id: F.next.value || null,
+      status: STATUS_SET.has(F.status.value) ? F.status.value : "todo",
+      owner: OWNER_LABEL[F.owner.value] ? F.owner.value : null,
+      doc: F.doc.value.trim() || null,
+      estimate_days: (estN === null || !Number.isFinite(estN) || estN <= 0) ? null : estN,
+      planned_start: dateOr(F.ps.value), planned_end: dateOr(F.pe.value), actual_start: dateOr(F.as.value), actual_done: dateOr(F.ad.value),
+    };
+  }
+  $("#ed-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    if (!state.editing) return;
+    const v = readForm();
+    if (!v.title) { toast("Give the to-do a title.", true); F.title.focus(); return; }
+    if (v.planned_start && v.planned_end && v.planned_end < v.planned_start) { toast("The planned end is before the planned start.", true); return; }
+    if (v.actual_start && v.actual_done && v.actual_done < v.actual_start) { toast("The actual done date is before the actual start.", true); return; }
+    const idx = index();
+    const stamp = nowIso();
+    if (state.editing.isNew) {
+      const id = newId(v.title);
+      const sibs = siblingsOf(idx, v.parent_id);
+      const order = sibs.length ? Math.max(0, ...sibs.map(s => (Number.isFinite(+s.order) ? +s.order : 0))) + 10 : 10;
+      const doc = { id, project_id: state.project, ...v, order, created_at: stamp, updated_at: stamp };
+      const ok = await write("Adding the to-do", () => state.db.collection(COL).doc(id).set(doc));
+      if (ok) { closeEditor(); toast(`Added ${v.title}`); }
+    } else {
+      const before = state.editing.snapshot;
+      const patch = {};
+      for (const k of Object.keys(v)) {
+        const a = before[k] === undefined ? null : before[k];
+        if (JSON.stringify(a) !== JSON.stringify(v[k])) patch[k] = v[k];
+      }
+      if (patch.parent_id !== undefined) {
+        const sibs = siblingsOf(idx, v.parent_id).filter(s => s.id !== before.id);
+        patch.order = sibs.length ? Math.max(0, ...sibs.map(s => (Number.isFinite(+s.order) ? +s.order : 0))) + 10 : 10;
+      }
+      const project = currentProject();
+      const wantCurrent = !$("#ed-current-wrap").hidden && $("#ed-current").checked;
+      const isCurrent = !!(project && project.current_id === before.id);
+      if (!Object.keys(patch).length && wantCurrent === isCurrent) { closeEditor(); return; }
+      let ok = true;
+      if (Object.keys(patch).length) { patch.updated_at = stamp; ok = await write("Saving the to-do", () => state.db.collection(COL).doc(before.id).update(patch)); }
+      if (ok && wantCurrent !== isCurrent) ok = await setCurrent(wantCurrent ? before.id : null);
+      if (ok) { closeEditor(); toast("Saved"); loadAll(); }
+    }
+  });
+  $("#ed-cancel").addEventListener("click", closeEditor);
+  $("#editor").addEventListener("click", e => { if (e.target === $("#editor")) closeEditor(); });
+  $("#ed-delete").addEventListener("click", () => {
+    if (!state.editing || state.editing.isNew) return;
+    const idx = index();
+    const kids = idx.kids.get(state.editing.id) || [];
+    $("#ed-confirm-text").textContent = kids.length
+      ? `Delete "${state.editing.snapshot.title}"? Its ${kids.length} ${kids.length === 1 ? "child moves" : "children move"} up one level.`
+      : `Delete "${state.editing.snapshot.title}"? This cannot be undone.`;
+    $("#ed-confirm").hidden = false;
+  });
+  $("#ed-delete-no").addEventListener("click", () => { $("#ed-confirm").hidden = true; });
+  $("#ed-delete-yes").addEventListener("click", async () => {
+    if (!state.editing || state.editing.isNew) return;
+    const idx = index();
+    const it = idx.byId.get(state.editing.id);
+    if (!it) { closeEditor(); return; }
+    const up = idx.parentOf(it);
+    const stamp = nowIso();
+    for (const k of (idx.kids.get(it.id) || [])) {
+      const ok = await write("Moving a child up", () => state.db.collection(COL).doc(k.id).update({ parent_id: up, updated_at: stamp }));
+      if (!ok) return;
+    }
+    const ok = await write("Deleting the to-do", () => state.db.collection(COL).doc(it.id).delete());
+    if (ok) { closeEditor(); toast(`Deleted ${it.title || "the to-do"}`); }
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape") return;
+    if (!$("#drawer").hidden) closeDrawer();
+    else if (!$("#pm").hidden) $("#pm").hidden = true;
+    else if (!$("#dm").hidden) closeDraftModal();
+    else if (!$("#editor").hidden) closeEditor();
+  });
+  $("#add-root").addEventListener("click", () => openDraftModal({}));
+
+  // ---------- drafts: a group of to-dos typed as a list ----------
+  // The modal keeps the lines in memory (text and depth); Add or Save writes them in one batch:
+  // the group as a draft row, each line as a draft row under the line above it that is one level up.
+  function caretOffset(node) {
+    const sel = getSelection();
+    if (!sel.rangeCount || !node.contains(sel.anchorNode)) return node.textContent.length;
+    const r = sel.getRangeAt(0).cloneRange();
+    r.selectNodeContents(node);
+    r.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset);
+    return r.toString().length;
+  }
+  function setCaret(node, offset) {
+    node.focus();
+    const sel = getSelection();
+    const range = document.createRange();
+    const text = node.firstChild;
+    if (!text || text.nodeType !== 3) { range.selectNodeContents(node); range.collapse(true); }
+    else { range.setStart(text, Math.max(0, Math.min(offset, text.textContent.length))); range.collapse(true); }
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  const dm = { lines: [], groupId: null, parentId: null, focus: { index: 0, caret: 0 }, seq: 1 };
+  const dmLine = (text = "", depth = 0, id = null) => ({ key: `l${dm.seq++}`, id, text, depth });
+  const nextOrderOf = sibs => (sibs.length ? Math.max(0, ...sibs.map(s => (Number.isFinite(+s.order) ? +s.order : 0))) + 10 : 10);
+  function openDraftModal({ groupId = null, parentId = null } = {}) {
+    const idx = index();
+    const group = groupId ? idx.byId.get(groupId) : null;
+    dm.groupId = group ? group.id : null;
+    dm.parentId = group ? idx.parentOf(group) : (parentId && idx.byId.has(parentId) ? parentId : null);
+    dm.lines = [];
+    if (group) {
+      const base = idx.rows.find(r => r.it.id === group.id);
+      for (const r of idx.rows.filter(r => r.anc.includes(group.id))) dm.lines.push(dmLine(r.it.title || "", Math.max(0, r.depth - base.depth - 1), r.it.id));
+    }
+    if (!dm.lines.length) dm.lines.push(dmLine());
+    $("#dm-heading").textContent = group ? "Edit the draft" : (dm.parentId ? `New draft under ${idx.byId.get(dm.parentId).title || "this to-do"}` : "New draft");
+    $("#dm-name").value = group ? (group.title || "") : "";
+    $("#dm-save").textContent = group ? "Save" : "Add";
+    $("#dm-save").disabled = state.readOnly;
+    $("#dm-delete").hidden = !group || state.readOnly;
+    $("#dm-confirm").hidden = true;
+    dm.focus = { index: 0, caret: 0 };
+    renderDraftLines(false);
+    $("#dm").hidden = false;
+    setTimeout(() => { if (group) focusLine(0, 0); else $("#dm-name").focus(); }, 0);
+  }
+  function closeDraftModal() { $("#dm").hidden = true; }
+  function focusLine(i, caret) {
+    const node = $("#dm-list").querySelector(`.note-text[data-index="${i}"]`);
+    if (node) setCaret(node, caret);
+    dm.focus = { index: i, caret };
+  }
+  function renderDraftLines(keepFocus = true) {
+    const list = $("#dm-list");
+    list.replaceChildren();
+    dm.lines.forEach((line, i) => {
+      const body = el("div", { class: "note-text", contenteditable: "plaintext-only", spellcheck: "true", "data-placeholder": "Type a to-do", "data-index": String(i) });
+      body.textContent = line.text;
+      body.addEventListener("input", () => { line.text = body.textContent.replace(/\n/g, " "); });
+      body.addEventListener("paste", e => { e.preventDefault(); document.execCommand("insertText", false, (e.clipboardData.getData("text/plain") || "").replace(/\s*\n\s*/g, " ")); });
+      body.addEventListener("keydown", e => draftLineKey(e, i, body));
+      list.append(el("div", { class: "note-line", style: `margin-left:${line.depth * 22}px` }, el("span", { class: "note-check static", "aria-hidden": "true" }), el("div", { class: "note-main" }, body)));
+    });
+    if (keepFocus) focusLine(dm.focus.index, dm.focus.caret);
+  }
+  // The lines below a line that sit deeper are its subtree: they move with it.
+  function subtreeEnd(i) { let j = i + 1; while (j < dm.lines.length && dm.lines[j].depth > dm.lines[i].depth) j++; return j; }
+  function draftLineKey(e, i, body) {
+    const line = dm.lines[i];
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); line.text = body.textContent; $("#dm-form").requestSubmit(); return; }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      const at = caretOffset(body);
+      const full = body.textContent;
+      line.text = full.slice(0, at);
+      const hasKids = i + 1 < dm.lines.length && dm.lines[i + 1].depth > line.depth;
+      dm.lines.splice(i + 1, 0, dmLine(full.slice(at), hasKids ? line.depth + 1 : line.depth));
+      dm.focus = { index: i + 1, caret: 0 };
+      renderDraftLines();
+      return;
+    }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const caret = caretOffset(body);
+      line.text = body.textContent;
+      const end = subtreeEnd(i);
+      if (!e.shiftKey) {
+        if (i === 0 || line.depth > dm.lines[i - 1].depth) return;   // at most one level below the line above
+        for (let j = i; j < end; j++) dm.lines[j].depth += 1;
+      } else {
+        if (line.depth === 0) return;
+        for (let j = i; j < end; j++) dm.lines[j].depth -= 1;
+      }
+      dm.focus = { index: i, caret };
+      renderDraftLines();
+      return;
+    }
+    if (e.key === "Backspace" && body.textContent === "" && dm.lines.length > 1) {
+      e.preventDefault();
+      const end = subtreeEnd(i);
+      for (let j = i + 1; j < end; j++) dm.lines[j].depth = Math.max(0, dm.lines[j].depth - 1);
+      dm.lines.splice(i, 1);
+      dm.focus = { index: Math.max(0, i - 1), caret: 1e9 };
+      renderDraftLines();
+      return;
+    }
+    if (e.key === "ArrowUp" && i > 0) { e.preventDefault(); line.text = body.textContent; focusLine(i - 1, caretOffset(body)); return; }
+    if (e.key === "ArrowDown" && i + 1 < dm.lines.length) { e.preventDefault(); line.text = body.textContent; focusLine(i + 1, caretOffset(body)); return; }
+  }
+  $("#dm-name").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); focusLine(0, 0); } });
+  $("#dm-sheet").addEventListener("mousedown", e => { if (e.target === $("#dm-sheet") || e.target === $("#dm-list")) { e.preventDefault(); focusLine(dm.lines.length - 1, 1e9); } });
+  $("#dm-sheet").addEventListener("keydown", e => {
+    if (e.key !== "Tab" || e.defaultPrevented) return;
+    const body = e.target.closest ? e.target.closest(".note-text") : null;
+    if (!body || !body.dataset.index) return;
+    draftLineKey(e, +body.dataset.index, body);
+  });
+  $("#dm-cancel").addEventListener("click", closeDraftModal);
+  $("#dm").addEventListener("click", e => { if (e.target === $("#dm")) closeDraftModal(); });
+  $("#dm-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const title = $("#dm-name").value.trim();
+    if (!title) { toast("Give the draft a title.", true); $("#dm-name").focus(); return; }
+    const idx = index();
+    const stamp = nowIso();
+    const lines = dm.lines.filter(l => l.text.trim() !== "");
+    const used = new Set(state.items.map(i => i.id));
+    const unique = base => { let id = base; for (let n = 2; used.has(id); n++) id = `${base}-${n}`; used.add(id); return id; };
+    const row = (id, text, parentId, order) => ({ id, project_id: state.project, title: text, notes: "", parent_id: parentId, next_id: null, order, status: "draft", owner: "user", doc: null, estimate_days: null, planned_start: null, planned_end: null, actual_start: null, actual_done: null, created_at: stamp, updated_at: stamp });
+    const writes = [];
+    const group = dm.groupId ? idx.byId.get(dm.groupId) : null;
+    let groupId = group ? group.id : unique(newId(title));
+    if (!group) writes.push({ op: "set", data: row(groupId, title, dm.parentId, nextOrderOf(siblingsOf(idx, dm.parentId))) });
+    else if ((group.title || "") !== title) writes.push({ op: "update", id: group.id, if_version: group.version, data: { title, updated_at: stamp } });
+    const stack = [groupId];   // stack[d] = the parent of a line at depth d
+    const counters = new Map();
+    const orderUnder = parentId => { const n = (counters.get(parentId) || 0) + 10; counters.set(parentId, n); return n; };
+    const kept = new Set();
+    for (const line of lines) {
+      const depth = Math.min(line.depth, stack.length - 1);
+      const parentId = stack[depth];
+      const text = line.text.trim();
+      let id = line.id && idx.byId.has(line.id) ? line.id : null;
+      if (id) {
+        const it = idx.byId.get(id);
+        kept.add(id);
+        const patch = {};
+        if ((it.title || "") !== text) patch.title = text;
+        if (idx.parentOf(it) !== parentId) patch.parent_id = parentId;
+        const order = orderUnder(parentId);
+        if (num(it.order) !== order) patch.order = order;
+        if (Object.keys(patch).length) writes.push({ op: "update", id, if_version: it.version, data: { ...patch, updated_at: stamp } });
+      } else {
+        id = unique(newId(text));
+        writes.push({ op: "set", data: row(id, text, parentId, orderUnder(parentId)) });
+      }
+      stack.length = depth + 1;
+      stack.push(id);
+    }
+    if (group) for (const r of idx.rows.filter(r => r.anc.includes(group.id))) if (!kept.has(r.it.id)) writes.push({ op: "delete", id: r.it.id, if_version: r.it.version });
+    if (!writes.length) { closeDraftModal(); return; }
+    const ok = await write(group ? "Saving the draft" : "Adding the draft", () => call("POST", "/api/batch", { writes }));
+    if (ok) { closeDraftModal(); toast(group ? "Saved" : `Added ${title}`); loadAll(); }
+  });
+  $("#dm-delete").addEventListener("click", () => {
+    const idx = index();
+    const group = dm.groupId ? idx.byId.get(dm.groupId) : null;
+    if (!group) return;
+    const n = idx.rows.filter(r => r.anc.includes(group.id)).length;
+    $("#dm-confirm-text").textContent = `Delete "${group.title}"${n ? ` and its ${n} ${n === 1 ? "line" : "lines"}` : ""}? This cannot be undone.`;
+    $("#dm-confirm").hidden = false;
+  });
+  $("#dm-delete-no").addEventListener("click", () => { $("#dm-confirm").hidden = true; });
+  $("#dm-delete-yes").addEventListener("click", async () => {
+    const idx = index();
+    const group = dm.groupId ? idx.byId.get(dm.groupId) : null;
+    if (!group) return;
+    const writes = [...idx.rows.filter(r => r.anc.includes(group.id)).map(r => ({ op: "delete", id: r.it.id, if_version: r.it.version })), { op: "delete", id: group.id, if_version: group.version }];
+    const ok = await write("Deleting the draft", () => call("POST", "/api/batch", { writes }));
+    if (ok) { closeDraftModal(); toast(`Deleted ${group.title || "the draft"}`); loadAll(); }
+  });
+  // The group's card: its title, then its lines with a circle each; the circle ticks a line done (or back to draft).
+  function renderDraftGroup(it, idx, lane) {
+    const base = idx.rows.find(r => r.it.id === it.id);
+    const lines = idx.rows.filter(r => r.anc.includes(it.id));
+    const ticked = lines.filter(r => statusOf(r.it) === "done").length;
+    const outside = it.parent_id && idx.byId.has(it.parent_id) ? idx.byId.get(it.parent_id) : null;
+    const card = el("article", { class: "card draft group", "data-id": it.id, draggable: state.readOnly ? null : "true", tabindex: "0", role: "button", "aria-label": `${it.title || "Untitled"}, ${lane.label}` });
+    const open = () => openDraftModal({ groupId: it.id });
+    card.addEventListener("click", e => { if (e.target.closest("button, a, .note-check")) return; open(); });
+    card.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === card) open(); });
+    if (!state.readOnly) {
+      card.addEventListener("dragstart", e => { state.dragId = it.id; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", it.id); } catch (err) { /* older engines */ } card.classList.add("dragging"); });
+      card.addEventListener("dragend", () => { state.dragId = null; card.classList.remove("dragging"); });
+    }
+    const list = el("div", { class: "notes" });
+    for (const r of lines) {
+      const done = statusOf(r.it) === "done";
+      const tick = el("button", { class: `note-check${done ? " on" : ""}`, type: "button", title: done ? "Back to draft" : "Tick it done", "aria-label": done ? "Done" : "Not done", onclick: async e => {
+        e.stopPropagation();
+        if (state.readOnly) return;
+        const p = new Map();
+        const to = done ? "draft" : "done";
+        addPatch(p, r.it.id, { status: to, ...statusDates(r.it, to), updated_at: nowIso() });
+        await applyPatches(p);
+      } }, "✓");
+      list.append(el("div", { class: `note-line${done ? " done" : ""}`, style: `margin-left:${Math.max(0, r.depth - base.depth - 1) * 18}px` }, tick, el("div", { class: "note-main" }, el("div", { class: "note-text", text: r.it.title || "Untitled" }))));
+    }
+    card.append(...[
+      outside ? el("div", { class: "eyebrow", text: `in ${outside.title || "a to-do"}` }) : null,
+      el("div", { class: "card-top" }, el("div", { class: "card-title", text: it.title || "Untitled" }), state.readOnly ? null : el("button", { class: "icon-btn", type: "button", title: "Edit the draft", "aria-label": "Edit the draft", onclick: e => { e.stopPropagation(); open(); } }, "✎")),
+      el("div", { class: "meta" }, el("span", { class: `chip owner-${it.owner || "none"}`, text: OWNER_LABEL[it.owner] || "Draft" }), lines.length ? el("span", { class: "mono", text: `${ticked} of ${lines.length} ticked` }) : null),
+      lines.length ? list : el("div", { class: "empty", text: "No lines yet. Open it to add some." }),
+    ].filter(Boolean));
+    return card;
+  }
+  window.boardDebug = { dm, state };
+
+  // ---------- doc drawer ----------
+  let drawerPath = "";
+  function sanitize(html) {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    doc.querySelectorAll("script, iframe, object, embed, style, link, meta, form").forEach(n => n.remove());
+    doc.querySelectorAll("*").forEach(n => {
+      for (const a of [...n.attributes]) {
+        const name = a.name.toLowerCase();
+        if (name.startsWith("on") || ((name === "href" || name === "src") && /^\s*javascript:/i.test(a.value))) n.removeAttribute(a.name);
+      }
+      if (n.tagName === "A") { n.setAttribute("target", "_blank"); n.setAttribute("rel", "noopener"); }
+    });
+    return doc.body.innerHTML;
+  }
+  async function openDrawer(path) {
+    if (!path) return;
+    drawerPath = path;
+    $("#dr-path").textContent = path;
+    $("#dr-snap").textContent = "Reading the file…";
+    const body = $("#dr-body");
+    body.replaceChildren(el("div", { class: "empty", text: "Loading the file…" }));
+    $("#drawer").hidden = false;
+    try {
+      const res = await fetch(`/api/doc?path=${encodeURIComponent(path)}`, { cache: "no-store" });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.message || `HTTP ${res.status}`);
+      if (drawerPath !== path) return;
+      $("#dr-snap").textContent = `From the repository, last modified ${new Date(payload.modified).toLocaleString()}`;
+      if (window.marked && typeof window.marked.parse === "function") {
+        body.innerHTML = sanitize(window.marked.parse(payload.content, { mangle: false, headerIds: false }));
+      } else {
+        body.replaceChildren(el("pre", { text: payload.content }));
+      }
+    } catch (e) {
+      $("#dr-snap").textContent = "";
+      body.replaceChildren(el("div", { class: "empty", text: `The file could not be read (${e.message}). Copy the path and open it in your editor instead.` }));
+    }
+  }
+  function closeDrawer() { $("#drawer").hidden = true; drawerPath = ""; }
+  $("#dr-close").addEventListener("click", closeDrawer);
+  $("#dr-copy").addEventListener("click", () => copyText(drawerPath, $("#dr-path")));
+  // ---------- projects ----------
+  function renderProjects() {
+    const box = $("#project-cards");
+    box.replaceChildren();
+    for (const p of state.projects) {
+      const c = p.counts || {};
+      box.append(el("a", { class: "project-card", href: `/p/${encodeURIComponent(p.id)}` },
+        el("div", { class: "card-title", text: p.name }),
+        p.description ? el("div", { class: "notes", text: p.description }) : null,
+        el("div", { class: "meta" }, el("span", { text: `${c.main || 0} main` }), el("span", { text: `${c.doing || 0} now` }), el("span", { text: `${c.todo || 0} next` }), el("span", { text: `${c.done || 0} done` }), c.draft ? el("span", { text: `${c.draft} drafts` }) : null),
+        p.current ? el("div", { class: "current-line" }, el("b", { text: "Now: " }), p.current.title) : null));
+    }
+    if (!state.projects.length) box.append(el("div", { class: "empty", text: state.loaded ? "No projects yet. Press New project." : "Loading…" }));
+    $("#projects-counts").textContent = state.projects.length ? `${state.projects.length} ${state.projects.length === 1 ? "project" : "projects"}` : "";
+  }
+  $("#new-project").addEventListener("click", () => { $("#pm-name").value = ""; $("#pm-desc").value = ""; $("#pm").hidden = false; setTimeout(() => $("#pm-name").focus(), 0); });
+  $("#pm-cancel").addEventListener("click", () => { $("#pm").hidden = true; });
+  $("#pm").addEventListener("click", e => { if (e.target === $("#pm")) $("#pm").hidden = true; });
+  $("#pm-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("#pm-name").value.trim();
+    if (!name) return;
+    const ok = await write("Creating the project", async () => { const payload = await call("POST", "/api/projects", { data: { name, description: $("#pm-desc").value.trim() } }); location.href = `/p/${encodeURIComponent(payload.project.id)}`; });
+    if (ok) $("#pm").hidden = true;
+  });
+
+  // ---------- render ----------
+  function render() {
+    if (state.view === "projects") { renderProjects(); return; }
+    const idx = index();
+    renderBoard(idx);
+    renderTimeline(idx);
+  }
+  let resizeTimer = null;
+  window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => renderTimeline(index()), 150); });
+
+  // ---------- boot ----------
+  // One file, three pages: / the projects, /p/<id> a project's board, /p/<id>/tree its timeline.
+  const route = location.pathname.replace(/\/+$/, "").match(/^\/p\/([^/]+)(\/tree)?$/);
+  state.project = route ? decodeURIComponent(route[1]) : null;
+  state.view = !route ? "projects" : (route[2] ? "tree" : "board");
+  document.documentElement.dataset.view = state.view;
+  if (state.project) { $("#nav-board").href = `/p/${encodeURIComponent(state.project)}`; $("#nav-tree").href = `/p/${encodeURIComponent(state.project)}/tree`; }
+  for (const a of document.querySelectorAll(".jump a")) a.classList.toggle("current", a.dataset.view === state.view);
+  render();
+  // ---------- the store (server.mjs) ----------
+  async function call(method, url, body) {
+    const res = await fetch(url, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined, cache: "no-store" });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(payload.message || `HTTP ${res.status}`);
+      err.code = payload.code || `http_${res.status}`;
+      if (err.code === "version_mismatch") loadAll();
+      throw err;
+    }
+    return payload;
+  }
+  const versionOf = id => { const it = state.items.find(x => x.id === id); return it ? it.version : undefined; };
+  const localDb = {
+    collection() {
+      return {
+        doc(id) {
+          // Every answer carries the row's new version: kept at once, so the next write names it even before the change event arrives.
+          const keep = payload => { const it = state.items.find(x => x.id === id); if (it && payload && payload.todo) { it.version = payload.todo.version; Object.assign(it, payload.todo); } return payload; };
+          return {
+            set: doc => call("POST", "/api/todos", { data: doc }).then(keep),
+            update: patch => call("PATCH", `/api/todos/${encodeURIComponent(id)}`, { if_version: versionOf(id), data: patch }).then(keep),
+            delete: () => call("DELETE", `/api/todos/${encodeURIComponent(id)}`, { if_version: versionOf(id) }).then(payload => { state.items = state.items.filter(x => x.id !== id); return payload; }),
+          };
+        },
+      };
+    },
+  };
+  let loading = null;
+  function loadAll() {
+    if (loading) return loading;
+    loading = Promise.all([call("GET", "/api/projects"), state.project ? call("GET", `/api/todos?project=${encodeURIComponent(state.project)}`) : Promise.resolve({ todos: [] })]).then(([p, t]) => {
+      state.projects = p.projects;
+      state.items = t.todos.map(x => ({ ...x }));
+      state.loaded = true;
+      const project = currentProject();
+      $("#brand-sub").textContent = project ? project.name : "Projects";
+      document.title = project ? `${project.name} · ProjectTodo` : "ProjectTodo";
+      if (state.project && !project) banner("There is no project with this id. Go back to the projects page.");
+      render();
+    }).catch(e => {
+      setLive("err", "disconnected");
+      toast(`The board could not be loaded (${e.message}).`, true);
+    }).finally(() => { loading = null; });
+    return loading;
+  }
+  (async () => {
+    state.db = localDb;
+    await loadAll();
+    setLive("on", "live");
+    // The server says when a row changed, by anyone; the page reads the rows again.
+    const events = new EventSource("/api/events");
+    events.addEventListener("change", () => { loadAll().then(() => { if (state.pending === 0) setLive("on", "live"); }); });
+    events.onerror = () => { setLive("err", "disconnected"); };
+    events.onopen = () => { if (state.pending === 0) setLive("on", "live"); };
+  })();
+})();
+</script>

@@ -1,0 +1,16 @@
+{
+  "name": "projecttodo",
+  "version": "0.1.0",
+  "description": "A small local to-do board for a person and their AI assistant: projects, a board with drafts, a timeline, and an MCP server.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.mjs",
+    "mcp": "node mcp.mjs"
+  },
+  "bin": {
+    "projecttodo": "server.mjs",
+    "projecttodo-mcp": "mcp.mjs"
+  }
+}
