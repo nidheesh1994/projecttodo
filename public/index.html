@@ -157,6 +157,10 @@ is the end of the last finished to-do under it.
   --shadow: 0 0 0 1px #c9cfd8;
   color-scheme: light;
 }
+
+/* Done on the timeline: the theme's accent, toned down, so finished work sits quieter than the current one. */
+:root { --done: color-mix(in srgb, var(--accent) 55%, var(--dull)); --done-soft: color-mix(in srgb, var(--accent-soft) 65%, var(--surface-2)); }
+
 .theme-pick { font: 12px var(--font-ui); background: var(--surface-2); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 24px 4px 8px; cursor: pointer; appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
 
 * { box-sizing: border-box; }
@@ -194,6 +198,9 @@ code { font-family: var(--font-mono); }
 .projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .project-card { display: block; background: var(--surface); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); color: inherit; text-decoration: none; border: 1px solid transparent; min-width: 0; }
 .project-card:hover, .project-card:focus-visible { border-color: var(--accent); outline: none; }
+.project-card { position: relative; }
+.project-card .edit { position: absolute; top: 8px; right: 8px; opacity: 0; }
+.project-card:hover .edit, .project-card:focus-within .edit, .project-card .edit:focus-visible { opacity: 1; }
 .project-card .card-title { font-size: 16px; }
 .project-card .current-line { margin-top: 8px; font-size: 12.5px; color: var(--fg); }
 .project-card .current-line b { color: var(--today); font-weight: 600; }
@@ -250,7 +257,23 @@ section { margin-top: 26px; }
 .lane-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 8px; }
 .lane-ctl { display: flex; align-items: center; gap: 4px; }
 .lane-ctl .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; }
-.lane-ctl .icon-btn:not(.tog) { font-size: 18px; line-height: 1; padding-bottom: 2px; }
+.lane-ctl .icon-btn:not(.tog):not(.lane-color) { font-size: 18px; line-height: 1; padding-bottom: 2px; }
+.lane-head[draggable="true"] { cursor: grab; }
+.lane.dragging-lane { opacity: 0.5; }
+.lane.over-lane { outline: 2px dashed var(--accent); outline-offset: 2px; }
+/* A coloured column: a line along its top, a tinted header, the title in the colour. */
+.lane.colored { box-shadow: inset 0 3px 0 var(--lane-color); }
+.lane.colored .lane-head { background: color-mix(in srgb, var(--lane-color) 16%, transparent); border-radius: 7px; margin-bottom: 4px; }
+.lane.colored .lane-title { color: var(--lane-color); }
+.lane-color .swatch { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--line-strong); display: block; }
+.lane-color.on .swatch { background: var(--lane-color); border-color: var(--lane-color); }
+.palette { position: absolute; z-index: 40; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 8px; display: grid; grid-template-columns: repeat(5, 22px); gap: 6px; }
+.palette button { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid transparent; cursor: pointer; padding: 0; background: var(--c); }
+.palette button:hover, .palette button.on { border-color: var(--fg); }
+.palette button.none { background: transparent; border-color: var(--line-strong); position: relative; }
+.palette button.none::after { content: ""; position: absolute; left: 3px; right: 3px; top: 50%; border-top: 1.5px solid var(--muted); transform: rotate(-45deg); }
+.palette .custom { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.palette input[type="color"] { width: 26px; height: 22px; padding: 0; border: 0; background: none; cursor: pointer; }
 .lane-title { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; }
 .lane-title .n { font-family: var(--font-mono); color: var(--muted); font-weight: 500; margin-left: 7px; letter-spacing: 0; }
 .cards { display: flex; flex-direction: column; gap: 12px; min-height: 48px; flex: 1; border-radius: 8px; }
@@ -306,7 +329,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
 .tl .grid { stroke: var(--line); stroke-width: 1; }
 .tl .weekend { fill: var(--surface-2); }
 .tl .edge { fill: none; stroke-width: 1.5; }
-.tl .edge.done { stroke: var(--accent); }
+.tl .edge.done { stroke: var(--done); }
 .tl .edge.dull { stroke: var(--dull); }
 .tl .edge.unsched { stroke-dasharray: 3 4; opacity: 0.7; }
 .tl .edge.next { stroke-width: 1.5; opacity: 0.9; }
@@ -315,7 +338,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
 .gbox { position: absolute; box-sizing: border-box; border-radius: 7px; padding: 5px 9px; background: var(--surface-2); border: 1px solid var(--line-strong); color: var(--muted); cursor: pointer; overflow: hidden; }
 .gbox.main { border-width: 1.5px; }
 .gbox.main .gtitle { font-weight: 700; }
-.gbox.done { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); }
+.gbox.done { background: var(--done-soft); border-color: var(--done); color: var(--fg); }
 .gbox.doing { border-color: var(--accent); border-left-width: 4px; color: var(--fg); }
 .gbox.deferred, .gbox.auto { border-style: dashed; }
 .gbox.current { outline: 2px solid var(--today); outline-offset: 2px; }
@@ -327,9 +350,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
 .tl .band-line { stroke: var(--line-strong); stroke-width: 1; opacity: 0.7; }
 .tl .lbl.root { font-weight: 700; }
 .tl .est { opacity: 0.6; }
-.tl marker.done path { fill: var(--accent); }
+.tl marker.done path { fill: var(--done); }
 .tl marker.dull path { fill: var(--dull); }
-.tl .bar.done { fill: var(--accent); }
+.tl .bar.done { fill: var(--done); }
 .tl .bar.doing { fill: url(#tl-stripes); stroke: var(--accent); stroke-width: 1; }
 .tl .bar.todo { fill: var(--dull); }
 .tl .bar.planned { fill: none; stroke: var(--dull); stroke-width: 1.5; }
@@ -583,6 +606,16 @@ svg.tl { display: block; font-family: var(--font-ui); }
     { key: "deferred", label: "Later" },
   ];
   const STATUS_SET = new Set(LANES.map(l => l.key));
+  // The board's columns as the project keeps them: an order and a colour each (set on the board page, shared by everyone).
+  function laneList() {
+    const p = currentProject();
+    const order = p && p.lanes && Array.isArray(p.lanes.order) ? p.lanes.order : null;
+    if (!order) return LANES;
+    const byKey = new Map(LANES.map(l => [l.key, l]));
+    return [...order.map(k => byKey.get(k)).filter(Boolean), ...LANES.filter(l => !order.includes(l.key))];
+  }
+  const laneColor = key => { const p = currentProject(); return (p && p.lanes && p.lanes.colors && p.lanes.colors[key]) || null; };
+  const LANE_PALETTE = ["#2f9e8f", "#3b82f6", "#22c55e", "#eab308", "#f97316", "#ef4444", "#a855f7", "#ec4899", "#64748b"];
   const OWNER_LABEL = { user: "You", assistant: "Assistant", both: "Both" };
   const COL = "todos";
 
@@ -602,6 +635,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     boot: null,       // the server's boot id, from the event stream
     snapshots: {},
     dragId: null,
+    dragLane: null,     // the column being dragged by its header
+    editingProject: null,   // the project open in the project form, or null when it makes a new one
     editing: null,
     pending: 0,
   };
@@ -932,21 +967,54 @@ svg.tl { display: block; font-family: var(--font-ui); }
     svg.append(svgEl("path", { d: dir === "up" ? "M3.5 10.5 8 6l4.5 4.5" : "M3.5 5.5 8 10l4.5-4.5", fill: "none", stroke: "currentColor", "stroke-width": "1.8", "stroke-linecap": "round", "stroke-linejoin": "round" }));
     return svg;
   }
+  // Saving the columns' order or colours on the project; the other open pages follow through the change stream.
+  async function saveLanes(change) {
+    const p = currentProject();
+    if (!p) return false;
+    const lanes = { order: laneList().map(l => l.key), colors: { ...((p.lanes && p.lanes.colors) || {}) }, ...change };
+    const ok = await write("Saving the board's columns", () => call("PATCH", `/api/projects/${encodeURIComponent(p.id)}`, { if_version: p.version, data: { lanes } }));
+    if (ok) loadAll();
+    return ok;
+  }
+  // The colour palette under a column's colour dot: presets, none, or a custom colour.
+  function openPalette(button, laneKey) {
+    closePalette();
+    const current = laneColor(laneKey);
+    const pal = el("div", { class: "palette", id: "palette", role: "dialog", "aria-label": "Column colour" });
+    const pick = async hex => { closePalette(); const p = currentProject(); const colors = { ...((p && p.lanes && p.lanes.colors) || {}) }; if (hex) colors[laneKey] = hex; else delete colors[laneKey]; await saveLanes({ colors }); };
+    for (const hex of LANE_PALETTE) pal.append(el("button", { type: "button", class: hex === current ? "on" : "", style: `--c:${hex}`, title: hex, "aria-label": `Colour ${hex}`, onclick: () => pick(hex) }));
+    pal.append(el("button", { type: "button", class: "none" + (current ? "" : " on"), title: "No colour", "aria-label": "No colour", onclick: () => pick(null) }));
+    const custom = el("input", { type: "color", value: current || "#2f9e8f", "aria-label": "Custom colour" });
+    custom.addEventListener("change", () => pick(custom.value));
+    pal.append(el("label", { class: "custom" }, custom, "Custom"));
+    document.body.append(pal);
+    const r = button.getBoundingClientRect();
+    pal.style.top = `${window.scrollY + r.bottom + 6}px`;
+    pal.style.left = `${Math.max(8, Math.min(window.scrollX + r.right - pal.offsetWidth, window.scrollX + window.innerWidth - pal.offsetWidth - 8))}px`;
+    setTimeout(() => { document.addEventListener("mousedown", paletteAway); document.addEventListener("keydown", paletteKey); }, 0);
+  }
+  function paletteAway(e) { if (!e.target.closest("#palette")) closePalette(); }
+  function paletteKey(e) { if (e.key === "Escape") closePalette(); }
+  function closePalette() { const pal = $("#palette"); if (pal) pal.remove(); document.removeEventListener("mousedown", paletteAway); document.removeEventListener("keydown", paletteKey); }
+
   function renderBoard(idx) {
     const board = $("#board-lanes");
     board.replaceChildren();
     const counts = {};
-    for (const lane of LANES) {
-      const laneEl = el("div", { class: "lane", "data-lane": lane.key });
+    const lanes = laneList();
+    for (const lane of lanes) {
+      const color = laneColor(lane.key);
+      const laneEl = el("div", { class: "lane" + (color ? " colored" : ""), "data-lane": lane.key, style: color ? `--lane-color:${color}` : null });
       const nEl = el("span", { class: "n" });
       const cards = el("div", { class: "cards" });
       // A card is a main to-do; everything under it is listed inside the card, whatever its own status.
       const inLane = idx.rows.filter(r => r.depth === 0 && statusOf(r.it) === lane.key);
       const laneIds = inLane.map(r => r.it.id);
       const anyOpen = laneIds.some(id => !isFolded(id, lane.key));
-      const head = el("div", { class: "lane-head" },
+      const head = el("div", { class: "lane-head", draggable: state.readOnly ? null : "true", title: state.readOnly ? null : "Drag to move this column" },
         el("div", { class: "lane-title" }, lane.label, nEl),
         el("div", { class: "lane-ctl" },
+          state.readOnly ? null : el("button", { class: "icon-btn lane-color" + (color ? " on" : ""), type: "button", title: "Colour of this column", "aria-label": `Colour of ${lane.label}`, onclick: e => { e.stopPropagation(); openPalette(e.currentTarget, lane.key); } }, el("span", { class: "swatch" })),
           laneIds.length ? el("button", { class: "icon-btn tog", type: "button", title: anyOpen ? `Fold every card in ${lane.label}` : `Open every card in ${lane.label}`, "aria-label": anyOpen ? "Fold all" : "Open all", onclick: () => foldLane(lane.key, anyOpen, laneIds) }, chevron(anyOpen ? "up" : "down")) : null,
           state.readOnly ? null : el("button", { class: "icon-btn", type: "button", title: `Add a to-do to ${lane.label}`, "aria-label": `Add a to-do to ${lane.label}`, onclick: () => lane.key === "draft" ? openDraftModal({}) : openEditor(null, { status: lane.key }) }, "+")));
       counts[lane.key] = inLane.length;
@@ -954,11 +1022,31 @@ svg.tl { display: block; font-family: var(--font-ui); }
       for (const r of inLane) cards.append(renderGroupCard(r.it, idx, lane));
       if (!inLane.length) cards.append(el("div", { class: "empty", text: state.loaded ? `Nothing in ${lane.label}. Drop a card here or press + to add one.` : "Loading the shared to-dos…" }));
       if (!state.readOnly) {
-        laneEl.addEventListener("dragover", e => { if (!state.dragId) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; laneEl.classList.add("over"); });
-        laneEl.addEventListener("dragleave", e => { if (!laneEl.contains(e.relatedTarget)) laneEl.classList.remove("over"); });
+        // the header moves the whole column; a card moves within or between columns
+        head.addEventListener("dragstart", e => {
+          if (e.target.closest("button")) { e.preventDefault(); return; }
+          state.dragLane = lane.key;
+          e.dataTransfer.effectAllowed = "move";
+          try { e.dataTransfer.setData("text/lane", lane.key); } catch (err) { /* older engines */ }
+          laneEl.classList.add("dragging-lane");
+        });
+        head.addEventListener("dragend", () => { state.dragLane = null; laneEl.classList.remove("dragging-lane"); document.querySelectorAll(".lane.over-lane, .lane.over").forEach(l => l.classList.remove("over-lane", "over")); });
+        laneEl.addEventListener("dragover", e => { if (!state.dragId && !state.dragLane) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; laneEl.classList.add(state.dragLane ? "over-lane" : "over"); });
+        laneEl.addEventListener("dragleave", e => { if (!laneEl.contains(e.relatedTarget)) laneEl.classList.remove("over", "over-lane"); });
         laneEl.addEventListener("drop", e => {
           e.preventDefault();
-          laneEl.classList.remove("over");
+          laneEl.classList.remove("over", "over-lane");
+          if (state.dragLane) {
+            const from = state.dragLane;
+            state.dragLane = null;
+            if (from === lane.key) return;
+            const order = lanes.map(l => l.key).filter(k => k !== from);
+            const r = laneEl.getBoundingClientRect();
+            const at = order.indexOf(lane.key) + (e.clientX < r.left + r.width / 2 ? 0 : 1);
+            order.splice(at, 0, from);
+            saveLanes({ order });
+            return;
+          }
           let id = state.dragId;
           if (!id) { try { id = e.dataTransfer.getData("text/plain"); } catch (err) { id = null; } }
           state.dragId = null;
@@ -970,7 +1058,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       laneEl.append(head, cards);
       board.append(laneEl);
     }
-    $("#board-counts").textContent = state.loaded ? LANES.map(l => `${counts[l.key]} ${l.label.toLowerCase()}`).join(" · ") : "";
+    $("#board-counts").textContent = state.loaded ? lanes.map(l => `${counts[l.key]} ${l.label.toLowerCase()}`).join(" · ") : "";
   }
 
   // ---------- timeline ----------
@@ -1473,7 +1561,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
         patch.order = sibs.length ? Math.max(0, ...sibs.map(s => (Number.isFinite(+s.order) ? +s.order : 0))) + 10 : 10;
       }
       const project = currentProject();
-      const wantCurrent = !$("#ed-current-wrap").hidden && $("#ed-current").checked;
+      const wantCurrent = !$("#ed-current-wrap").hidden && $("#ed-current").checked && v.status !== "done";   // a finished to-do is never the current one
       const isCurrent = !!(project && project.current_id === before.id);
       if (!Object.keys(patch).length && wantCurrent === isCurrent) { closeEditor(); return; }
       let ok = true;
@@ -1832,6 +1920,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       const c = p.counts || {};
       box.append(el("a", { class: "project-card", href: `/p/${encodeURIComponent(p.id)}` },
         el("div", { class: "card-title", text: p.name }),
+        state.readOnly ? null : el("button", { class: "icon-btn edit", type: "button", title: "Edit the project's name and description", "aria-label": `Edit ${p.name}`, onclick: e => { e.preventDefault(); e.stopPropagation(); openProjectModal(p); } }, "✎"),
         p.description ? el("div", { class: "notes", text: p.description }) : null,
         el("div", { class: "meta" }, el("span", { text: `${c.main || 0} main` }), el("span", { text: `${c.doing || 0} now` }), el("span", { text: `${c.todo || 0} next` }), el("span", { text: `${c.done || 0} done` }), c.draft ? el("span", { text: `${c.draft} drafts` }) : null),
         p.current ? el("div", { class: "current-line" }, el("b", { text: "Current: " }), p.current.title) : null));
@@ -1839,14 +1928,33 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (!state.projects.length) box.append(el("div", { class: "empty", text: state.loaded ? "No projects yet. Press New project." : "Loading…" }));
     $("#projects-counts").textContent = state.projects.length ? `${state.projects.length} ${state.projects.length === 1 ? "project" : "projects"}` : "";
   }
-  $("#new-project").addEventListener("click", () => { $("#pm-name").value = ""; $("#pm-desc").value = ""; $("#pm").hidden = false; setTimeout(() => $("#pm-name").focus(), 0); });
+  // The same form makes a project and edits one: the heading and the button say which.
+  function openProjectModal(project) {
+    state.editingProject = project ? project.id : null;
+    $("#pm-heading").textContent = project ? "Edit project" : "New project";
+    $("#pm-save").textContent = project ? "Save" : "Create";
+    $("#pm-name").value = project ? project.name : "";
+    $("#pm-desc").value = project ? (project.description || "") : "";
+    $("#pm").hidden = false;
+    setTimeout(() => $("#pm-name").focus(), 0);
+  }
+  $("#new-project").addEventListener("click", () => openProjectModal(null));
   $("#pm-cancel").addEventListener("click", () => { $("#pm").hidden = true; });
   $("#pm").addEventListener("click", e => { if (e.target === $("#pm")) $("#pm").hidden = true; });
   $("#pm-form").addEventListener("submit", async e => {
     e.preventDefault();
     const name = $("#pm-name").value.trim();
     if (!name) return;
-    const ok = await write("Creating the project", async () => { const payload = await call("POST", "/api/projects", { data: { name, description: $("#pm-desc").value.trim() } }); location.href = `/p/${encodeURIComponent(payload.project.id)}`; });
+    const description = $("#pm-desc").value.trim();
+    if (state.editingProject) {
+      const project = state.projects.find(p => p.id === state.editingProject);
+      if (!project) { $("#pm").hidden = true; return; }
+      if (project.name === name && (project.description || "") === description) { $("#pm").hidden = true; return; }
+      const ok = await write("Saving the project", () => call("PATCH", `/api/projects/${encodeURIComponent(project.id)}`, { if_version: project.version, data: { name, description } }));
+      if (ok) { $("#pm").hidden = true; toast("Saved"); loadAll(); }
+      return;
+    }
+    const ok = await write("Creating the project", async () => { const payload = await call("POST", "/api/projects", { data: { name, description } }); location.href = `/p/${encodeURIComponent(payload.project.id)}`; });
     if (ok) $("#pm").hidden = true;
   });
 

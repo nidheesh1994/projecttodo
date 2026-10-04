@@ -7,7 +7,8 @@ to-dos you see.
 
 ![The board: Drafts, Current and Next, with Done and Later off to the right](docs/screenshots/board.png)
 
-- **Projects** on the first page, each a card. Open one for its board.
+- **Projects** on the first page, each a card. Open one for its board; the pencil on a card
+  edits its name and description.
 - **Board**: lanes for Drafts, Current, Next, Done and Later. Press **+** on Drafts (or
   "New draft") and type a title and a list like a notepad: Enter for the next line, Tab
   for a child, Shift+Tab back out. "Add" makes one draft card with those lines. You go
@@ -17,7 +18,8 @@ to-dos you see.
   it again (Done and Later cards start folded); double-click the header to edit the
   main to-do, click a line to edit that to-do, and click its circle to tick it done.
   A card cannot go to Done until every line in it is ticked. Each lane's header has an
-  arrow that folds or opens every card in it.
+  arrow that folds or opens every card in it, and a colour dot that colours the lane;
+  drag a lane's header to move the lane. Order and colours are kept on the project.
   Drafts is twice as wide as the other lanes; Done and Later sit past the right edge and
   scroll into view.
 - **Timeline**: dates along the top. A main to-do (one without a parent) spans its days;

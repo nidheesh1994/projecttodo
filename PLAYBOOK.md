@@ -57,6 +57,11 @@ Take **one draft group at a time**, in board order.
    line means, what "done" looks like, and whether anything is missing.
 2. Propose a shape: which lines stay, which merge, which split, which go to Later,
    which are not to-dos at all (notes, questions). Wait for the answer.
+   **A group with a single line** is often a title and its explanation, not a parent
+   and a child. If the line only explains or restates the title ("No option to edit
+   the project" / "need a way to edit the name and description"), put its text in the
+   group's `notes` and delete the line; keep it as a child only when it is a step
+   that can be finished on its own. Ask when it could be either.
 3. For the agreed group:
    - write the plan document with `write_doc` (template below) and put its path in
      the group's `doc`;

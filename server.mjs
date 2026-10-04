@@ -25,6 +25,27 @@ const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 3004);
 const STATUSES = new Set(["draft", "todo", "doing", "done", "deferred"]);
 const OWNERS = new Set(["user", "assistant", "both"]);
+const BOARD_ORDER = ["draft", "doing", "todo", "done", "deferred"];
+// A project's board columns: their order and a colour each, as the person set them on the board page.
+function cleanLanes(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v !== "object" || Array.isArray(v)) throw new HttpError(400, "invalid_argument", "lanes is an object with order and colors, or null.");
+  const out = {};
+  if (Array.isArray(v.order)) {
+    if (v.order.some(k => !STATUSES.has(k)) || new Set(v.order).size !== v.order.length) throw new HttpError(400, "invalid_argument", "lanes.order lists each status at most once: draft, doing, todo, done, deferred.");
+    out.order = [...v.order, ...BOARD_ORDER.filter(k => !v.order.includes(k))];
+  }
+  if (v.colors && typeof v.colors === "object" && !Array.isArray(v.colors)) {
+    out.colors = {};
+    for (const [k, c] of Object.entries(v.colors)) {
+      if (!STATUSES.has(k)) throw new HttpError(400, "invalid_argument", `${k} is not a status.`);
+      if (c === null || c === undefined || c === "") continue;
+      if (typeof c !== "string" || !/^#[0-9a-fA-F]{6}$/.test(c)) throw new HttpError(400, "invalid_argument", "A column colour is written #rrggbb.");
+      out.colors[k] = c.toLowerCase();
+    }
+  }
+  return out;
+}
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const BOOT = Date.now().toString(36);   // changes on every start: pages reload when they see a new one
@@ -181,6 +202,8 @@ async function applyWrites(writes) {
     const results = steps.map((step) => step());
     try {
       checkDone(writes, results);
+      // A finished to-do is no longer the project's current one.
+      for (const row of results) if (row && !row.deleted && row.status === "done") for (const p of store.projects) if (p.current_id === row.id) { p.current_id = null; p.updated_at = new Date().toISOString(); p.version += 1; }
     } catch (error) {
       store.todos = todosBefore;
       store.projects.forEach((p, i) => { p.current_id = currentsBefore[i]; });
@@ -236,10 +259,12 @@ async function updateProject(id, data, ifVersion) {
     const patch = {};
     if ("name" in data) { patch.name = String(data.name || "").trim(); if (!patch.name) throw new HttpError(400, "invalid_argument", "A project needs a name."); }
     if ("description" in data) patch.description = String(data.description || "").trim();
+    if ("lanes" in data) patch.lanes = cleanLanes(data.lanes);
     if ("current_id" in data) {
       if (data.current_id !== null) {
         const row = findTodo(String(data.current_id));
         if (!row || row.project_id !== id || row.parent_id) throw new HttpError(400, "invalid_argument", "The current to-do must be a main to-do of this project.");
+        if (row.status === "done") throw new HttpError(400, "invalid_argument", "A finished to-do cannot be the current one.");
         // Taking a main to-do up: it is in progress from today, unless it already has a start date.
         const next = { ...row, status: row.status === "done" ? row.status : "doing", actual_start: row.actual_start || todayStr(), actual_start_time: row.actual_start ? (row.actual_start_time || null) : nowTime(), updated_at: new Date().toISOString(), version: row.version + 1 };
         store.todos[store.todos.indexOf(row)] = next;
@@ -448,7 +473,7 @@ async function mcpMessage(msg) {
   switch (msg.method) {
     case "initialize": {
       const asked = msg.params && msg.params.protocolVersion;
-      return reply({ protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0], capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } }, serverInfo: { name: "projecttodo", version: "0.2.0" }, instructions: "A to-do board shared with a person. Call get_playbook first: it says how the board is worked. In short: projects hold to-dos; a to-do without a parent is a main to-do and sits on the timeline by its dates. Lanes are statuses: draft (jotted down by the person, to discuss one group at a time), todo (Next), doing (Current), done, deferred (Later). After a draft is discussed, write its plan with write_doc, put the path in doc, set owner, estimate_days and planned dates, and move it on (set_current for the one that starts now). Setting status doing or done stamps the actual date and time of day; keep them current. Estimates are days, with fractions for hours (8 hours a day). A to-do is done only when everything under it is done. Never delete the person's draft lines or invent estimates without asking. Dates are YYYY-MM-DD." });
+      return reply({ protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0], capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } }, serverInfo: { name: "projecttodo", version: "0.2.0" }, instructions: "A to-do board shared with a person. Call get_playbook first: it says how the board is worked. In short: projects hold to-dos; a to-do without a parent is a main to-do and sits on the timeline by its dates. Lanes are statuses: draft (jotted down by the person, to discuss one group at a time), todo (Next), doing (Current), done, deferred (Later). After a draft is discussed, write its plan with write_doc, put the path in doc, set owner, estimate_days and planned dates, and move it on (set_current for the one that starts now). Setting status doing or done stamps the actual date and time of day; keep them current. Estimates are days, with fractions for hours (8 hours a day). A to-do is done only when everything under it is done. A draft group with a single line is usually a title and its explanation: put the line in the group's notes and delete it, unless it is a step that can be finished on its own. Never delete the person's other draft lines or invent estimates without asking. Dates are YYYY-MM-DD." });
     }
     case "ping": return reply({});
     case "tools/list": return reply({ tools: MCP_TOOLS });
