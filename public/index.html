@@ -234,6 +234,7 @@ section { margin-top: 26px; }
 @media (max-width: 600px) { .board { grid-auto-columns: 100%; } .lane[data-lane="draft"] { grid-column: span 1; } }
 .lane { background: var(--surface-2); border-radius: 10px; padding: 8px; min-width: 0; display: flex; flex-direction: column; }
 .lane-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 8px; }
+.lane-ctl { display: flex; align-items: center; gap: 2px; }
 .lane-title { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; }
 .lane-title .n { font-family: var(--font-mono); color: var(--muted); font-weight: 500; margin-left: 7px; letter-spacing: 0; }
 .cards { display: flex; flex-direction: column; gap: 8px; min-height: 48px; flex: 1; border-radius: 8px; }
@@ -570,7 +571,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     project: null,       // the open project's id (from the path)
     projects: [],
     view: "projects",
-    expanded: new Set(),   // done cards opened out fully (per viewer)
+    foldCard: new Map(),   // card id → "open" | "closed" (per viewer); overrides the lane's setting
+    foldLane: new Map(),   // lane key → "open" | "closed"; Done starts closed, the rest open
     tlZoom: 1,
     tlScrolled: false,
     tlNow: null,
@@ -661,13 +663,13 @@ svg.tl { display: block; font-family: var(--font-ui); }
 
   // ---------- per-viewer collapse memory ----------
   try {
-    try { const ex = JSON.parse(localStorage.getItem("projecttodo-expanded") || "[]"); if (Array.isArray(ex)) state.expanded = new Set(ex); } catch (e) { /* fine */ }
+    try { const f = JSON.parse(localStorage.getItem("projecttodo-fold") || "{}"); state.foldCard = new Map(Object.entries(f.card || {})); state.foldLane = new Map(Object.entries(f.lane || {})); } catch (e) { /* fine */ }
     const raw = localStorage.getItem("projecttodo-collapsed");
     if (raw) JSON.parse(raw).forEach(id => state.collapsed.add(id));
   } catch (e) { /* storage unavailable: fine */ }
   function persistCollapsed() {
     try { localStorage.setItem("projecttodo-collapsed", JSON.stringify([...state.collapsed])); } catch (e) { /* fine */ }
-    try { localStorage.setItem("projecttodo-expanded", JSON.stringify([...state.expanded])); } catch (e) { /* fine */ }
+    try { localStorage.setItem("projecttodo-fold", JSON.stringify({ card: Object.fromEntries(state.foldCard), lane: Object.fromEntries(state.foldLane) })); } catch (e) { /* fine */ }
   }
 
   // ---------- tree ----------
@@ -836,17 +838,37 @@ svg.tl { display: block; font-family: var(--font-ui); }
     }
     return line;
   }
-  function toggleExpanded(id) {
-    if (state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
+  // A card folds to one row. Each card can be set on its own; a lane's arrow sets every card in it.
+  const isFolded = (id, laneKey) => (state.foldCard.get(id) || state.foldLane.get(laneKey) || (laneKey === "done" ? "closed" : "open")) === "closed";
+  function toggleFold(id, laneKey) {
+    state.foldCard.set(id, isFolded(id, laneKey) ? "open" : "closed");
     persistCollapsed();
     render();
+  }
+  function foldLane(laneKey, closed, ids) {
+    state.foldLane.set(laneKey, closed ? "closed" : "open");
+    for (const id of ids) state.foldCard.delete(id);
+    persistCollapsed();
+    render();
+  }
+  function foldButton(id, laneKey) {
+    const folded = isFolded(id, laneKey);
+    return el("button", { class: "icon-btn tog", type: "button", title: folded ? "Open the card out" : "Fold the card to one row", "aria-label": folded ? "Open the card out" : "Fold the card", "aria-expanded": String(!folded), onclick: e => { e.stopPropagation(); toggleFold(id, laneKey); } }, folded ? "⌄" : "⌃");
+  }
+  // What a folded card shows beside its title: when it finished, how long it has been going, or its estimate.
+  function compactMeta(it, st) {
+    const d = durations(it);
+    if (st === "done") return it.actual_done ? fmtDay(it.actual_done) : "";
+    if (st === "doing") return d.actual !== null ? `${d.actual} d so far` : (it.actual_start ? `from ${fmtDay(it.actual_start)}` : "");
+    if (it.planned_start || it.planned_end) return rangeText(it.planned_start, it.planned_end);
+    return d.est !== null ? `est ${d.est} d` : "";
   }
   function renderCard(it, idx, ctx) {
     const st = statusOf(it);
     const kids = idx.kids.get(it.id) || [];
     const collapsed = state.collapsed.has(it.id);
     // A done card is one row (the title and when it finished) until its arrow opens it out.
-    const compact = ctx.lane.key === "done" && !state.expanded.has(it.id);
+    const compact = isFolded(it.id, ctx.lane.key);
     const card = el("article", {
       class: `card ${st}${ctx.indent ? " child" : ""}${compact ? " compact" : ""}`,
       "data-id": it.id,
@@ -879,15 +901,12 @@ svg.tl { display: block; font-family: var(--font-ui); }
     }
     top.append(el("div", { class: "card-title", text: it.title || "Untitled" }));
     if (compact) {
-      top.append(
-        el("span", { class: "when", text: it.actual_done ? fmtDay(it.actual_done) : "" }),
-        el("button", { class: "icon-btn tog", type: "button", title: "Open the card out", "aria-label": "Open the card out", "aria-expanded": "false", onclick: e => { e.stopPropagation(); toggleExpanded(it.id); } }, "⌄"),
-      );
+      top.append(el("span", { class: "when", text: compactMeta(it, st) }), foldButton(it.id, ctx.lane.key));
       card.append(top);
       return card;
     }
     const ctl = el("div", { class: "ctl" });
-    if (ctx.lane.key === "done") ctl.append(el("button", { class: "icon-btn tog", type: "button", title: "Fold the card to one row", "aria-label": "Fold the card", "aria-expanded": "true", onclick: e => { e.stopPropagation(); toggleExpanded(it.id); } }, "⌃"));
+    ctl.append(foldButton(it.id, ctx.lane.key));
     if (!state.readOnly) {
       ctl.append(
         el("button", { class: "icon-btn", type: "button", title: "Move up among its siblings", "aria-label": "Move up", onclick: e => { e.stopPropagation(); moveSibling(it.id, -1); } }, "↑"),
@@ -923,13 +942,17 @@ svg.tl { display: block; font-family: var(--font-ui); }
     for (const lane of LANES) {
       const laneEl = el("div", { class: "lane", "data-lane": lane.key });
       const nEl = el("span", { class: "n" });
-      const head = el("div", { class: "lane-head" },
-        el("div", { class: "lane-title" }, lane.label, nEl),
-        state.readOnly ? null : el("button", { class: "icon-btn", type: "button", title: `Add a to-do to ${lane.label}`, "aria-label": `Add a to-do to ${lane.label}`, onclick: () => lane.key === "draft" ? openDraftModal({}) : openEditor(null, { status: lane.key }) }, "+"));
       const cards = el("div", { class: "cards" });
       // A to-do under a draft group is shown inside the group's card, whatever its own status.
       const inGroup = r => r.anc.some(a => statusOf(idx.byId.get(a) || {}) === "draft");
       const inLane = idx.rows.filter(r => statusOf(r.it) === lane.key && !inGroup(r));
+      const laneIds = inLane.map(r => r.it.id);
+      const anyOpen = laneIds.some(id => !isFolded(id, lane.key));
+      const head = el("div", { class: "lane-head" },
+        el("div", { class: "lane-title" }, lane.label, nEl),
+        el("div", { class: "lane-ctl" },
+          laneIds.length ? el("button", { class: "icon-btn tog", type: "button", title: anyOpen ? `Fold every card in ${lane.label}` : `Open every card in ${lane.label}`, "aria-label": anyOpen ? "Fold all" : "Open all", onclick: () => foldLane(lane.key, anyOpen, laneIds) }, anyOpen ? "⌃" : "⌄") : null,
+          state.readOnly ? null : el("button", { class: "icon-btn", type: "button", title: `Add a to-do to ${lane.label}`, "aria-label": `Add a to-do to ${lane.label}`, onclick: () => lane.key === "draft" ? openDraftModal({}) : openEditor(null, { status: lane.key }) }, "+")));
       const inLaneIds = new Set(inLane.map(r => r.it.id));
       counts[lane.key] = inLane.length;
       nEl.textContent = String(inLane.length);
@@ -1648,7 +1671,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const lines = idx.rows.filter(r => r.anc.includes(it.id));
     const ticked = lines.filter(r => statusOf(r.it) === "done").length;
     const outside = it.parent_id && idx.byId.has(it.parent_id) ? idx.byId.get(it.parent_id) : null;
-    const card = el("article", { class: "card draft group", "data-id": it.id, draggable: state.readOnly ? null : "true", tabindex: "0", role: "button", "aria-label": `${it.title || "Untitled"}, ${lane.label}` });
+    const compact = isFolded(it.id, lane.key);
+    const card = el("article", { class: `card draft group${compact ? " compact" : ""}`, "data-id": it.id, draggable: state.readOnly ? null : "true", tabindex: "0", role: "button", "aria-label": `${it.title || "Untitled"}, ${lane.label}` });
     const open = () => openDraftModal({ groupId: it.id });
     card.addEventListener("click", e => { if (e.target.closest("button, a, .note-check")) return; open(); });
     card.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === card) open(); });
@@ -1671,9 +1695,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
     }
     card.append(...[
       outside ? el("div", { class: "eyebrow", text: `in ${outside.title || "a to-do"}` }) : null,
-      el("div", { class: "card-top" }, el("div", { class: "card-title", text: it.title || "Untitled" }), state.readOnly ? null : el("button", { class: "icon-btn", type: "button", title: "Edit the draft", "aria-label": "Edit the draft", onclick: e => { e.stopPropagation(); open(); } }, "✎")),
-      el("div", { class: "meta" }, el("span", { class: `chip owner-${it.owner || "none"}`, text: OWNER_LABEL[it.owner] || "Draft" }), lines.length ? el("span", { class: "mono", text: `${ticked} of ${lines.length} ticked` }) : null),
-      lines.length ? list : el("div", { class: "empty", text: "No lines yet. Open it to add some." }),
+      el("div", { class: "card-top" }, el("div", { class: "card-title", text: it.title || "Untitled" }), compact ? el("span", { class: "when", text: lines.length ? `${ticked} of ${lines.length}` : "" }) : null, state.readOnly || compact ? null : el("button", { class: "icon-btn", type: "button", title: "Edit the draft", "aria-label": "Edit the draft", onclick: e => { e.stopPropagation(); open(); } }, "✎"), foldButton(it.id, lane.key)),
+      compact ? null : el("div", { class: "meta" }, el("span", { class: `chip owner-${it.owner || "none"}`, text: OWNER_LABEL[it.owner] || "Draft" }), lines.length ? el("span", { class: "mono", text: `${ticked} of ${lines.length} ticked` }) : null),
+      compact ? null : (lines.length ? list : el("div", { class: "empty", text: "No lines yet. Open it to add some." })),
     ].filter(Boolean));
     return card;
   }
