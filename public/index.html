@@ -195,6 +195,26 @@ code { font-family: var(--font-mono); }
 .project-card .current-line { margin-top: 8px; font-size: 12.5px; color: var(--fg); }
 .project-card .current-line b { color: var(--today); font-weight: 600; }
 .f.check { flex-direction: row; align-items: center; gap: 8px; color: var(--fg); font-size: 13px; }
+/* The details view: what a to-do is, read at a glance; Edit opens the form. */
+.dv-dialog { width: min(540px, 100%); }
+.dv-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.dv-titles { min-width: 0; }
+.dv-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 2px; }
+.dv-head h3 { margin: 0; font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; }
+.dv-pills { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: none; }
+.chip.status-doing { border-color: var(--accent); color: var(--fg); }
+.chip.status-done { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); }
+.chip.status-draft, .chip.status-deferred { border-style: dashed; }
+.dv-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 16px; margin: 16px 0 0; font-size: 13px; }
+.dv-grid dt { color: var(--muted); }
+.dv-grid dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.dv-grid dd .mono { font-family: var(--font-mono); font-size: 12px; }
+.dv-notes { margin-top: 14px; white-space: pre-wrap; line-height: 1.5; font-size: 13.5px; }
+.dv-doc { margin-top: 12px; }
+.dv-kids { margin-top: 14px; }
+.dv-kids .dv-kids-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 4px; }
+.dv-kids .note-line { padding: 3px 0; }
+.dv-kids .note-text { font-size: 13.5px; }
 .f.check input { width: auto; }
 .banner { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); color: var(--fg); border-left: 3px solid var(--today); font-size: 13px; }
 
@@ -413,6 +433,24 @@ svg.tl { display: block; font-family: var(--font-ui); }
       <span>→ next</span>
     </div>
   </section>
+</div>
+
+<div class="modal" id="dv" hidden role="dialog" aria-modal="true" aria-labelledby="dv-title">
+  <div class="dialog dv-dialog">
+    <div class="dv-head">
+      <div class="dv-titles"><div class="dv-eyebrow" id="dv-eyebrow"></div><h3 id="dv-title"></h3></div>
+      <div class="dv-pills" id="dv-pills"></div>
+    </div>
+    <dl class="dv-grid" id="dv-grid"></dl>
+    <div class="dv-notes" id="dv-notes" hidden></div>
+    <div class="dv-doc" id="dv-doc" hidden></div>
+    <div class="dv-kids" id="dv-kids" hidden></div>
+    <div class="dialog-actions">
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="dv-close">Close</button>
+      <button class="btn primary" type="button" id="dv-edit">Edit</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal" id="pm" hidden role="dialog" aria-modal="true" aria-labelledby="pm-heading">
@@ -1202,8 +1240,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
         class: `gbox ${st}${b.depth === 0 ? " main" : ""}${sp && sp.kind === "auto" ? " auto" : ""}${currentId === it.id ? " current" : ""}`,
         style: `left:${b.x}px;top:${b.y}px;width:${Math.max(36, b.w - GAP)}px;height:${BOX_H}px`, tabindex: "0", role: "button", title: tipText(it, g),
       }, el("div", { class: "gtitle", text: it.title || "Untitled" }), el("div", { class: "gmeta", text: meta }));
-      node.addEventListener("click", () => openEditor(it.id));
-      node.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEditor(it.id); } });
+      node.addEventListener("click", () => openDetails(it.id));
+      node.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(it.id); } });
       graph.append(node);
     }
     wrap.replaceChildren(graph);
@@ -1212,6 +1250,70 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const noDates = mainList.filter(sp => sp.kind === "auto").length;
     $("#tl-counts").textContent = `${boxes.length} items · ${mains.length} main · ${noDates} without dates`;
   }
+
+  // ---------- details: what a to-do is, read at a glance (the timeline opens this; the board opens the form) ----------
+  function openDetails(id) {
+    const idx = index();
+    const it = idx.byId.get(id);
+    if (!it) { toast("That to-do is no longer in the store.", true); return; }
+    const st = statusOf(it);
+    const lane = LANES.find(l => l.key === st);
+    const project = currentProject();
+    const parent = idx.parentOf(it) ? idx.byId.get(idx.parentOf(it)) : null;
+    const today = parseDay(todayStr());
+    $("#dv-eyebrow").textContent = parent ? `in ${parent.title || "Untitled"}` : "Main to-do";
+    $("#dv-title").textContent = it.title || "Untitled";
+    const pills = $("#dv-pills");
+    pills.replaceChildren(el("span", { class: `chip status-${st}`, text: lane ? lane.label : st }));
+    if (project && project.current_id === it.id) pills.append(el("span", { class: "chip current", text: "Current" }));
+    if (it.owner && OWNER_LABEL[it.owner]) pills.append(el("span", { class: `chip owner-${it.owner}`, text: OWNER_LABEL[it.owner] }));
+    const grid = $("#dv-grid");
+    grid.replaceChildren();
+    const row = (label, value) => { if (value === null || value === undefined || value === "") return; grid.append(el("dt", { text: label }), el("dd", {}, typeof value === "string" ? el("span", { text: value }) : value)); };
+    const d = durations(it);
+    const estDays = d.est !== null ? `${d.est} d` : "";
+    if (it.planned_start || it.planned_end) row("Estimated", `${rangeText(it.planned_start, it.planned_end)}${estDays ? ` · ${estDays}` : ""}`);
+    else if (estDays) row("Estimate", estDays);
+    if (it.actual_start || it.actual_done) row("Actual", `${rangeText(it.actual_start, it.actual_done, st === "doing" ? "today" : "")}${d.actual !== null ? ` · ${d.open ? `${d.actual} d so far` : `${d.actual} d`}` : ""}`);
+    if (!parent && !it.planned_start && !it.planned_end && !it.actual_start && st !== "draft") {
+      const sp = mainSpans(idx, orderedKids(idx, null).filter(m => statusOf(m) !== "draft"), today).find(x => x.it.id === it.id);
+      if (sp) row("Placed", `${fmtDay(dayStr(sp.start))} to ${fmtDay(dayStr(sp.end))}, after the main to-do before it (dates not set)`);
+    }
+    if (st === "done" && !it.actual_done) { const last = latestDescendantDone(idx, it); if (last) row("Ended", `${fmtDay(last)} (its last finished to-do)`); }
+    const next = it.next_id ? idx.byId.get(it.next_id) : null;
+    if (next) row("Next", next.title || "Untitled");
+    const before = state.items.find(x => x.next_id === it.id);
+    if (before) row("After", before.title || "Untitled");
+    row("Changed", it.updated_at ? new Date(it.updated_at).toLocaleString() : "");
+    $("#dv-notes").textContent = it.notes || "";
+    $("#dv-notes").hidden = !it.notes;
+    const doc = $("#dv-doc");
+    doc.replaceChildren();
+    if (it.doc) doc.append(docLine(String(it.doc)));
+    doc.hidden = !it.doc;
+    const kidsBox = $("#dv-kids");
+    kidsBox.replaceChildren();
+    const under = idx.rows.filter(r => r.anc.includes(it.id));
+    if (under.length) {
+      const base = idx.rows.find(r => r.it.id === it.id);
+      const done = under.filter(r => statusOf(r.it) === "done").length;
+      kidsBox.append(el("div", { class: "dv-kids-title", text: `Under it · ${done} of ${under.length} done` }));
+      for (const r of under) {
+        const kst = statusOf(r.it);
+        kidsBox.append(el("div", { class: `note-line${kst === "done" ? " done" : ""}`, style: `margin-left:${Math.max(0, r.depth - base.depth - 1) * 18}px` },
+          el("span", { class: `note-check static${kst === "done" ? " on" : ""}`, "aria-hidden": "true" }, kst === "done" ? "✓" : ""),
+          el("div", { class: "note-main" }, el("div", { class: "note-text", text: r.it.title || "Untitled" }), kst !== "done" && kst !== "todo" ? el("div", { class: "note-in", text: (LANES.find(l => l.key === kst) || {}).label || kst }) : null)));
+      }
+    }
+    kidsBox.hidden = !under.length;
+    $("#dv-edit").hidden = state.readOnly;
+    $("#dv-edit").onclick = () => { closeDetails(); openEditor(it.id); };
+    $("#dv").hidden = false;
+    setTimeout(() => $("#dv-close").focus(), 0);
+  }
+  function closeDetails() { $("#dv").hidden = true; }
+  $("#dv-close").addEventListener("click", closeDetails);
+  $("#dv").addEventListener("click", e => { if (e.target === $("#dv")) closeDetails(); });
 
   // ---------- editor ----------
   const F = {
@@ -1352,6 +1454,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
     if (!$("#drawer").hidden) closeDrawer();
+    else if (!$("#dv").hidden) closeDetails();
     else if (!$("#pm").hidden) $("#pm").hidden = true;
     else if (!$("#dm").hidden) closeDraftModal();
     else if (!$("#editor").hidden) closeEditor();
