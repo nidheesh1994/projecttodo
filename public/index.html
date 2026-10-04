@@ -27,6 +27,7 @@ to right, children below their parent. A main to-do with no dates is drawn after
 before it. Making a main to-do the project's current one starts it today; when it is done, its end
 is the end of the last finished to-do under it.
 -->
+<script>try { const t = localStorage.getItem("projecttodo-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) { /* fine */ }</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
@@ -86,7 +87,7 @@ is the end of the last finished to-do under it.
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme]) {
     --bg: #0e1116; --surface: #161a21; --surface-2: #1e242d; --fg: #e6e9ee; --muted: #98a2b1;
     --line: #27303c; --line-strong: #3a4553; --accent: #34c4ae; --accent-ink: #062722; --accent-soft: #173b36;
     --dull: #5c6879; --dull-soft: #242b35; --today: #ff8b64; --danger: #ff7b6e; --danger-ink: #1a0b09;
@@ -103,6 +104,57 @@ is the end of the last finished to-do under it.
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4);
   color-scheme: dark;
 }
+/* Themes (the Theme menu in the header; "Auto" follows the system). Each one sets every token. */
+:root[data-theme="midnight"] {
+  --bg: #0b1020; --surface: #121a2f; --surface-2: #1a2540; --fg: #e3e8f5; --muted: #93a0c0;
+  --line: #233052; --line-strong: #34456f; --accent: #6ea8ff; --accent-ink: #061330; --accent-soft: #1a2f58;
+  --dull: #566588; --dull-soft: #1c2640; --today: #ffb454; --danger: #ff6b7a; --danger-ink: #2a0a0f;
+  --scrim: rgba(2, 6, 20, 0.65);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+:root[data-theme="forest"] {
+  --bg: #0f1512; --surface: #16201b; --surface-2: #1e2b24; --fg: #e4ece6; --muted: #93a69a;
+  --line: #273830; --line-strong: #3b5244; --accent: #7bc96f; --accent-ink: #0b1a0e; --accent-soft: #203a27;
+  --dull: #5f7367; --dull-soft: #1f2b25; --today: #f2b84b; --danger: #ff7b6e; --danger-ink: #1a0b09;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+:root[data-theme="ember"] {
+  --bg: #141010; --surface: #1d1616; --surface-2: #281f1e; --fg: #f1e9e6; --muted: #b39d96;
+  --line: #3a2d2b; --line-strong: #55413d; --accent: #ff7a45; --accent-ink: #2a1008; --accent-soft: #4a2416;
+  --dull: #7a6660; --dull-soft: #2d2321; --today: #ffd166; --danger: #ff6b6b; --danger-ink: #2a0a0a;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+:root[data-theme="paper"] {
+  --bg: #f6f1e7; --surface: #fffdf8; --surface-2: #ece4d3; --fg: #2b2419; --muted: #6f6353;
+  --line: #dcd2bf; --line-strong: #c3b69f; --accent: #b5542a; --accent-ink: #fff7ee; --accent-soft: #f3dccb;
+  --dull: #b3a890; --dull-soft: #e6dcc8; --today: #2f6fb5; --danger: #b23a2a; --danger-ink: #ffffff;
+  --scrim: rgba(43, 36, 25, 0.45);
+  --shadow: 0 1px 2px rgba(43, 36, 25, 0.08), 0 8px 24px rgba(43, 36, 25, 0.1);
+  --font-ui: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  color-scheme: light;
+}
+:root[data-theme="rose"] {
+  --bg: #fbf3f6; --surface: #ffffff; --surface-2: #f3e4ea; --fg: #2a1b22; --muted: #7a5f6a;
+  --line: #e8d5dd; --line-strong: #d1b7c2; --accent: #c2185b; --accent-ink: #ffffff; --accent-soft: #f8d7e3;
+  --dull: #b79aa5; --dull-soft: #eddde3; --today: #0f8f80; --danger: #b93a2d; --danger-ink: #ffffff;
+  --scrim: rgba(42, 27, 34, 0.45);
+  --shadow: 0 1px 2px rgba(42, 27, 34, 0.06), 0 8px 24px rgba(42, 27, 34, 0.08);
+  color-scheme: light;
+}
+:root[data-theme="slate"] {
+  --bg: #ffffff; --surface: #ffffff; --surface-2: #eef0f3; --fg: #000000; --muted: #3d4652;
+  --line: #c9cfd8; --line-strong: #8d97a5; --accent: #1d4ed8; --accent-ink: #ffffff; --accent-soft: #dbe4ff;
+  --dull: #7b8594; --dull-soft: #e5e8ed; --today: #c2410c; --danger: #b91c1c; --danger-ink: #ffffff;
+  --scrim: rgba(0, 0, 0, 0.5);
+  --shadow: 0 0 0 1px #c9cfd8;
+  color-scheme: light;
+}
+.theme-pick { font: 12px var(--font-ui); background: var(--surface-2); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 24px 4px 8px; cursor: pointer; appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
 
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 14px; line-height: 1.45; }
@@ -320,6 +372,17 @@ svg.tl { display: block; font-family: var(--font-ui); }
     <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
     <nav class="jump" aria-label="Pages"><a href="/" data-view="projects">Projects</a><a href="/" data-view="board" id="nav-board">Board</a><a href="/" data-view="tree" id="nav-tree">Timeline</a></nav>
     <div class="top-actions">
+      <select class="theme-pick" id="theme" aria-label="Theme" title="Theme">
+        <option value="">Auto</option>
+        <option value="light">Day</option>
+        <option value="dark">Night</option>
+        <option value="midnight">Midnight</option>
+        <option value="forest">Forest</option>
+        <option value="ember">Ember</option>
+        <option value="paper">Paper</option>
+        <option value="rose">Rose</option>
+        <option value="slate">Slate</option>
+      </select>
       <button class="btn primary" id="new-project" type="button">New project</button>
       <button class="btn primary" id="add-root" type="button">New draft</button>
     </div>
@@ -1589,6 +1652,14 @@ svg.tl { display: block; font-family: var(--font-ui); }
   }
   let resizeTimer = null;
   window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => renderTimeline(index()), 150); });
+
+  // ---------- theme ----------
+  $("#theme").value = document.documentElement.dataset.theme || "";
+  $("#theme").addEventListener("change", e => {
+    const t = e.target.value;
+    if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+    try { if (t) localStorage.setItem("projecttodo-theme", t); else localStorage.removeItem("projecttodo-theme"); } catch (err) { /* fine */ }
+  });
 
   // ---------- boot ----------
   // One file, three pages: / the projects, /p/<id> a project's board, /p/<id>/tree its timeline.

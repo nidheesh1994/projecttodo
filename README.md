@@ -5,6 +5,8 @@ page, a JSON file, no dependencies, and an MCP server so the assistant you alrea
 (Claude Code, Claude Desktop, or anything that speaks MCP) can read and update the same
 to-dos you see.
 
+![The board: Drafts, Now and Next, with Done and Later off to the right](docs/screenshots/board.jpg)
+
 - **Projects** on the first page, each a card. Open one for its board.
 - **Board**: lanes for Drafts, Now, Next, Done and Later. Press **+** on Drafts (or
   "New draft") and type a title and a list like a notepad: Enter for the next line, Tab
@@ -24,6 +26,18 @@ to-dos you see.
   to read it), and the view zooms with the − and + buttons, Cmd and scroll, or Cmd and
   minus, plus and 0.
 - **Live**: every change saves at once and shows up for everyone with the page open.
+- **Themes**: Auto (follows the system), Day, Night, Midnight, Forest, Ember, Paper,
+  Rose and Slate, from the menu in the header; remembered per browser.
+
+| Projects | Draft pad |
+|---|---|
+| ![Projects](docs/screenshots/projects.jpg) | ![The draft pad](docs/screenshots/draft.jpg) |
+
+![Timeline](docs/screenshots/timeline.jpg)
+
+| Paper | Midnight |
+|---|---|
+| ![Paper theme](docs/screenshots/theme-paper.jpg) | ![Midnight theme](docs/screenshots/theme-midnight.jpg) |
 
 ## Run it
 
