@@ -33,7 +33,9 @@ to-dos you see.
   drag a lane's header to move the lane. Order and colours are kept on the project.
   Drafts is twice as wide as the other lanes; Done and Later sit past the right edge and
   scroll into view.
-- **Timeline**: dates along the top. A main to-do (one without a parent) spans its days;
+- **Timeline**: dates along the top. A main to-do (one without a parent) spans its days,
+  and one with a start time begins at that time and ends at its end time or at now, kept
+  at least as wide as its tree needs; rows stack in time order;
   its to-dos hang under it, siblings left to right, children below their parent, in as
   many columns as its days allow. A main to-do with no dates is placed after the one
   before it. The thin line under a main to-do is its estimate when the actual days

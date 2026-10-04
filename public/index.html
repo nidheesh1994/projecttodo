@@ -1570,19 +1570,43 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const z = state.tlZoom || 1;   // zoom scales the days and the columns; the rows keep their height
     const compact = document.documentElement.dataset.layout === "compact";   // the Compact layout draws smaller boxes and days
     const SLOT = Math.round((compact ? 124 : 156) * z), MINDAY = Math.round((compact ? 24 : 30) * z), BOX_H = compact ? 38 : 42, ROW_H = compact ? 56 : 62, GAP = 8, AXIS_H = compact ? 42 : 48, PAD = 16, FOOT = 22;
+    // Where a main to-do sits within its days: a to-do with a start time runs from that time to its end time (or to now while it
+    // runs), as fractions of a day; the others cover whole days. (user, 2026-10-04: boxes start at their actual start)
+    const fracOf = t => { const m = parseTime(t); return m === null ? null : m / 1440; };
+    const nowFrac = (() => { const d = new Date(); return (d.getHours() * 60 + d.getMinutes()) / 1440; })();
+    for (const sp of mainList) {
+      const f0 = sp.kind === "actual" ? fracOf(sp.it.actual_start_time) : null;
+      sp.timed = f0 !== null;
+      sp.t0 = sp.start + (f0 || 0);
+      if (sp.timed) {
+        const ad = parseDay(sp.it.actual_done), f1 = fracOf(sp.it.actual_done_time);
+        sp.t1 = ad !== null && f1 !== null ? ad + f1 : (sp.open ? Math.max(sp.t0, today + nowFrac) : sp.end + 1);
+        if (sp.t1 <= sp.t0) sp.t1 = sp.t0 + 1 / 48;   // half an hour at the least
+      } else sp.t1 = sp.end + 1;
+    }
     const dayW = new Map();
     for (let d = min; d <= max; d++) dayW.set(d, MINDAY);
-    for (const sp of mainList) { const n = sp.end - sp.start + 1; const need = Math.ceil(size.get(sp.it.id).w / n) * SLOT; for (let d = sp.start; d <= sp.end; d++) dayW.set(d, Math.max(dayW.get(d), need)); }
+    for (const sp of mainList) {
+      const n = sp.end - sp.start + 1, needAll = size.get(sp.it.id).w * SLOT;
+      const need = Math.ceil(size.get(sp.it.id).w / n) * SLOT;
+      for (let d = sp.start; d <= sp.end; d++) dayW.set(d, Math.max(dayW.get(d), need));
+      // a to-do that starts late in its only day widens the day, so its tree still fits before the day ends (unless it starts very late)
+      if (sp.timed && n === 1) { const frac = sp.t0 - sp.start; if (frac < 0.75) dayW.set(sp.start, Math.max(dayW.get(sp.start), Math.ceil(needAll / (1 - frac)))); }
+    }
     const X = new Map();
     let x = PAD;
     for (let d = min; d <= max + 1; d++) { X.set(d, x); x += dayW.get(d) || MINDAY; }
-    const chartRight = x;
-    // main to-dos that share days go on separate rows of lanes
+    const xAt = t => { const d = Math.floor(t); return (X.has(d) ? X.get(d) : X.get(max + 1)) + (dayW.get(d) || MINDAY) * (t - d); };
+    let chartRight = x;
+    // main to-dos whose boxes would overlap go on separate rows of lanes, earliest start first
     const lanes = [];
-    for (const sp of mainList.slice().sort((a, b) => a.start - b.start || a.end - b.end)) {
-      let li = lanes.findIndex(l => l.spans.every(([a, b]) => sp.end < a || sp.start > b));
+    for (const sp of mainList.slice().sort((a, b) => a.t0 - b.t0 || a.t1 - b.t1)) {
+      const x0 = xAt(sp.t0), w = Math.max(xAt(sp.t1) - x0, size.get(sp.it.id).w * SLOT);
+      sp.px = [x0, x0 + w];
+      chartRight = Math.max(chartRight, x0 + w);
+      let li = lanes.findIndex(l => l.spans.every(([a, b]) => sp.px[1] + GAP <= a || sp.px[0] >= b + GAP));
       if (li < 0) { lanes.push({ spans: [], h: 0 }); li = lanes.length - 1; }
-      lanes[li].spans.push([sp.start, sp.end]);
+      lanes[li].spans.push(sp.px);
       lanes[li].h = Math.max(lanes[li].h, size.get(sp.it.id).h);
       sp.lane = li;
     }
@@ -1599,7 +1623,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       let cx = x0;
       for (const k of kids) { const kw = size.get(k.id).w * unit; placeTree(k.id, cx, kw, row + 1, yTop, depth + 1, null); cx += kw; }
     };
-    for (const sp of mainList) placeTree(sp.it.id, X.get(sp.start), X.get(sp.end + 1) - X.get(sp.start), 0, laneY[sp.lane], 0, sp);
+    for (const sp of mainList) placeTree(sp.it.id, sp.px[0], sp.px[1] - sp.px[0], 0, laneY[sp.lane], 0, sp);
     const boxOf = new Map(boxes.map(b => [b.id, b]));
 
     const graph = el("div", { class: "graph", style: `width:${width}px;height:${height}px` });
@@ -1686,7 +1710,10 @@ svg.tl { display: block; font-family: var(--font-ui); }
       let meta;
       if (sp) {
         const dates = sp.start === sp.end ? fmtDay(dayStr(sp.start)) : `${fmtDay(dayStr(sp.start))} to ${fmtDay(dayStr(sp.end))}`;
-        meta = [dates + (sp.open ? " so far" : "") + (sp.kind === "auto" ? " (not set)" : ""), sp.kind === "actual" ? `${sp.end - sp.start + 1} d` : "", d.est !== null ? `est ${d.est} d` : ""].filter(Boolean).join(" · ");
+        // a to-do with times on one day reads as its clock range and how long it took
+        const clock = sp.timed && sp.start === sp.end ? ` ${it.actual_start_time} to ${it.actual_done_time || "now"}` : "";
+        const took = sp.timed ? tookText(d) : (sp.kind === "actual" ? `${sp.end - sp.start + 1} d` : "");
+        meta = [dates + clock + (sp.open ? " so far" : "") + (sp.kind === "auto" ? " (not set)" : ""), took, d.est !== null ? `est ${estText(d.est)}` : ""].filter(Boolean).join(" · ");
       } else {
         meta = [
           it.actual_start || it.actual_done ? rangeText(it.actual_start, it.actual_done, st === "doing" ? "today" : "") : (it.planned_start || it.planned_end ? "est " + rangeText(it.planned_start, it.planned_end) : ""),
