@@ -237,7 +237,7 @@ section { margin-top: 26px; }
 
 /* Board */
 /* Four units across: Drafts takes two, Current and Next one each; Done and Later sit beyond the right edge and scroll in. */
-.board { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 36px) / 4); gap: 12px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; }
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 36px) / 4); gap: 12px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; overscroll-behavior-x: contain; }
 .lane { scroll-snap-align: start; }
 .lane[data-lane="draft"] { grid-column: span 2; }
 @media (max-width: 1040px) { .board { grid-auto-columns: calc((100% - 12px) / 2); } .lane[data-lane="draft"] { grid-column: span 2; } }
@@ -290,7 +290,8 @@ a.fact-v:hover, a.fact-v:focus-visible { text-decoration: underline; }
 .empty { color: var(--muted); font-size: 13px; padding: 10px 6px; }
 
 /* Timeline */
-.tl-panel { background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); overflow-x: auto; min-width: 0; }
+/* overscroll-behavior keeps a swipe past the start inside the panel: no browser back gesture, the same as the board. */
+.tl-panel { background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); overflow-x: auto; min-width: 0; overscroll-behavior-x: contain; }
 .zoom { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
 .zoom .icon-btn { font-size: 15px; padding: 1px 7px; }
 .zoom-level { border: 0; background: transparent; color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; cursor: pointer; padding: 2px 4px; min-width: 42px; }
