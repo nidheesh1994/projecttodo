@@ -7,6 +7,7 @@
 //   HOST                       127.0.0.1
 //   PROJECTTODO_DATA_DIR       where todos.json lives (default: ./data next to this file)
 //   PROJECTTODO_DOCS_DIR       the folder a to-do's `doc` path is read from (default: the data dir's parent)
+//   PROJECTTODO_DOC_WRITE_DIR  where the write_doc tool may create markdown files, inside the docs folder (default: todos)
 //   PROJECTTODO_DEFAULT_PROJECT  the name of the project made for rows from before projects existed
 import http from "node:http";
 import fs from "node:fs/promises";
@@ -17,6 +18,8 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(process.env.PROJECTTODO_DATA_DIR || path.join(ROOT, "data"));
 const DATA = path.join(DATA_DIR, "todos.json");
 const DOCS_DIR = path.resolve(process.env.PROJECTTODO_DOCS_DIR || path.dirname(DATA_DIR));
+const DOC_WRITE_DIR = path.resolve(DOCS_DIR, process.env.PROJECTTODO_DOC_WRITE_DIR || "todos");
+const PLAYBOOK = path.join(ROOT, "PLAYBOOK.md");
 const PUBLIC = path.join(ROOT, "public");
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 3004);
@@ -255,6 +258,37 @@ async function readDoc(relative) {
 }
 
 // ---------- MCP: the same store for an assistant (mcp.mjs forwards stdio here) ----------
+// The playbook (PLAYBOOK.md next to this file): how an assistant is meant to work the board.
+async function readPlaybook() {
+  try { return await fs.readFile(PLAYBOOK, "utf8"); } catch { throw new HttpError(404, "not_found", "PLAYBOOK.md is missing next to server.mjs."); }
+}
+
+// write_doc: a markdown file inside the write folder (PROJECTTODO_DOC_WRITE_DIR, inside the docs folder).
+// The path may be given relative to the docs folder or to the write folder; the answer gives the path to put in `doc`.
+async function writeDoc(relative, content, mode = "create") {
+  const clean = String(relative || "").replace(/\\/g, "/").replace(/^\.\//, "");
+  if (!clean || clean.startsWith("/") || clean.split("/").includes("..") || !clean.toLowerCase().endsWith(".md")) {
+    throw new HttpError(400, "invalid_argument", "Give a path ending in .md, relative to the docs folder (or to its write folder).");
+  }
+  if (typeof content !== "string") throw new HttpError(400, "invalid_argument", "content must be a string of markdown.");
+  if (Buffer.byteLength(content, "utf8") > 512 * 1024) throw new HttpError(413, "too_large", "The document is larger than 512 KB.");
+  if (!["create", "replace", "append"].includes(mode)) throw new HttpError(400, "invalid_argument", "mode must be create, replace or append.");
+  if (!(DOC_WRITE_DIR + path.sep).startsWith(DOCS_DIR + path.sep) && DOC_WRITE_DIR !== DOCS_DIR) throw new HttpError(500, "misconfigured", "PROJECTTODO_DOC_WRITE_DIR must be inside the docs folder.");
+  const inside = p => p === DOC_WRITE_DIR || p.startsWith(DOC_WRITE_DIR + path.sep);
+  let absolute = path.resolve(DOCS_DIR, clean);
+  if (!inside(absolute)) absolute = path.resolve(DOC_WRITE_DIR, clean);
+  if (!inside(absolute)) throw new HttpError(400, "invalid_argument", `Documents are written inside ${path.relative(DOCS_DIR, DOC_WRITE_DIR) || "."} (the write folder); the path left it.`);
+  const shown = path.relative(DOCS_DIR, absolute).split(path.sep).join("/");
+  let exists = false;
+  try { exists = (await fs.stat(absolute)).isFile(); } catch { /* new file */ }
+  if (mode === "create" && exists) throw new HttpError(409, "exists", `${shown} already exists. Read it first, then use mode "append" to add to it or "replace" to rewrite it.`);
+  await fs.mkdir(path.dirname(absolute), { recursive: true });
+  if (mode === "append") await fs.appendFile(absolute, (exists && !content.startsWith("\n") ? "\n" : "") + content, "utf8");
+  else await fs.writeFile(absolute, content, "utf8");
+  const stat = await fs.stat(absolute);
+  return { path: shown, bytes: stat.size, modified: stat.mtime.toISOString(), mode, created: !exists };
+}
+
 const TODO_FIELDS = {
   title: { type: "string" }, notes: { type: "string" }, parent_id: { type: ["string", "null"], description: "The parent to-do; null for a main to-do." },
   next_id: { type: ["string", "null"], description: "The sibling that comes after this one." }, status: { type: "string", enum: [...STATUSES] },
@@ -263,16 +297,35 @@ const TODO_FIELDS = {
   actual_start: { type: ["string", "null"], description: "YYYY-MM-DD." }, actual_done: { type: ["string", "null"], description: "Actual end, YYYY-MM-DD." }, order: { type: "number", description: "Position among siblings; 10, 20, 30 …" },
 };
 const MCP_TOOLS = [
-  { name: "list_projects", description: "The projects, each with its counts and its current main to-do.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "get_playbook", description: "How this board is meant to be worked: lanes, rules, how to review drafts, how to plan a to-do with a document, the document template. Call it first.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "list_projects", description: "The projects, each with its counts and its current main to-do. Start a session here, then list_todos.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
   { name: "create_project", description: "Make a project.", inputSchema: { type: "object", properties: { name: { type: "string" }, description: { type: "string" } }, required: ["name"], additionalProperties: false } },
-  { name: "list_todos", description: "The to-dos of a project, in tree order (a child follows its parent). Statuses: draft (jotted down, to discuss), todo (next), doing (current), done, deferred (later).", inputSchema: { type: "object", properties: { project_id: { type: "string" }, status: { type: "string", enum: [...STATUSES] } }, required: ["project_id"], additionalProperties: false } },
+  { name: "list_todos", description: "The to-dos of a project, in tree order (a child follows its parent). Statuses: draft (jotted down, to discuss; review one group at a time), todo (next), doing (current), done, deferred (later). A to-do's doc is the path of its plan document (read_doc).", inputSchema: { type: "object", properties: { project_id: { type: "string" }, status: { type: "string", enum: [...STATUSES] } }, required: ["project_id"], additionalProperties: false } },
   { name: "get_todo", description: "One to-do with every field.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false } },
   { name: "create_todo", description: "Add a to-do to a project. Without a parent it is a main to-do.", inputSchema: { type: "object", properties: { project_id: { type: "string" }, ...TODO_FIELDS }, required: ["project_id", "title"], additionalProperties: false } },
-  { name: "update_todo", description: "Change fields of a to-do. Only the fields given change. A to-do cannot be set done while anything under it is open (children_open).", inputSchema: { type: "object", properties: { id: { type: "string" }, ...TODO_FIELDS }, required: ["id"], additionalProperties: false } },
+  { name: "update_todo", description: "Change fields of a to-do. Only the fields given change. After a draft is discussed: status todo (or set_current), owner, estimate_days, planned dates, doc. A to-do cannot be set done while anything under it is open (children_open).", inputSchema: { type: "object", properties: { id: { type: "string" }, ...TODO_FIELDS }, required: ["id"], additionalProperties: false } },
   { name: "delete_todo", description: "Delete a to-do; its children move up one level.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false } },
   { name: "set_current", description: "Make a main to-do the project's current one: it goes in progress from today. Pass null to clear.", inputSchema: { type: "object", properties: { project_id: { type: "string" }, todo_id: { type: ["string", "null"] } }, required: ["project_id", "todo_id"], additionalProperties: false } },
+  { name: "read_doc", description: "Read a to-do's plan document: a markdown file under the docs folder, by the path in its doc field.", inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: false } },
+  { name: "write_doc", description: "Write a plan document (markdown) inside the docs write folder and get the path to put in the to-do's doc field. mode: create (the default; refuses to overwrite), replace, or append (for Progress and Decisions lines). Follow the playbook's template.", inputSchema: { type: "object", properties: { path: { type: "string", description: "File name or path ending in .md, e.g. export-button.md" }, content: { type: "string" }, mode: { type: "string", enum: ["create", "replace", "append"] } }, required: ["path", "content"], additionalProperties: false } },
   { name: "add_draft", description: "Jot a draft group down: a title and lines (depth 0 for a line, 1 for a child of the line above, and so on), as the board's draft pad does.", inputSchema: { type: "object", properties: { project_id: { type: "string" }, title: { type: "string" }, lines: { type: "array", items: { type: "object", properties: { title: { type: "string" }, depth: { type: "integer", minimum: 0 } }, required: ["title"] } } }, required: ["project_id", "title", "lines"], additionalProperties: false } },
 ];
+
+// Prompts: ready-made asks a client can offer (Claude Desktop lists them as slash commands).
+const MCP_PROMPTS = [
+  { name: "review_drafts", description: "Go through a project's draft groups with the person, one at a time, and turn the agreed ones into planned to-dos.", arguments: [{ name: "project_id", description: "The project's id; leave it out to be asked.", required: false }] },
+  { name: "plan_todo", description: "Write or update the plan document of one to-do and set its fields to match.", arguments: [{ name: "todo_id", description: "The to-do's id.", required: true }] },
+  { name: "daily_review", description: "What finished, what is current, what is next, what slipped; update dates and the progress log.", arguments: [{ name: "project_id", description: "The project's id; leave it out to be asked.", required: false }] },
+];
+function promptText(name, args = {}) {
+  const project = args.project_id ? `the project ${args.project_id}` : "the project we work in (ask me which if you do not know)";
+  switch (name) {
+    case "review_drafts": return `Call get_playbook and follow its "Reviewing drafts" section. Then call list_todos for ${project} with status draft. Take the draft groups one at a time, in board order: read the group back to me in your own words, ask what unclear lines mean and what done looks like, propose which lines stay, merge, split or go to Later, and wait for my answer before changing anything. For each agreed group: write its plan document with write_doc, set doc, owner, estimate_days and the planned dates on the group, move it to todo (or set_current if it starts now), give the children status todo with owners, estimates and a next_id chain. Do not delete any of my lines without asking. End each group with a short list of what you changed.`;
+    case "plan_todo": return `Call get_playbook and follow its "Planning a to-do" section for the to-do ${args.todo_id || "(ask me which)"}. Read it with get_todo and, if it has a doc, read_doc. Ask me what is unclear, then write or update the plan document with write_doc following the template (Why, Scope, Plan as a checklist that mirrors the child to-dos, Decisions with dates, Open questions, Progress). Set the to-do's fields to match: doc, owner, estimate_days, planned dates. Propose the estimate with a reason and let me confirm it before you write it. Finish with a short list of what changed.`;
+    case "daily_review": return `Call get_playbook and follow its "Daily review" section for ${project}. Call list_todos and report in a few lines: what finished since yesterday, the current main to-do and how far it is, what is next, what slipped (planned end in the past and not done), and how many draft groups wait. Then ask me what changed and update statuses, owners and dates accordingly, adding dated Progress lines to the documents with write_doc in append mode. Offer to review the oldest draft group.`;
+    default: return null;
+  }
+}
 
 function treeOrder(rows) {
   const kids = new Map();
@@ -298,6 +351,9 @@ function uniqueId(base) {
 async function mcpCall(name, args = {}) {
   const stamp = new Date().toISOString();
   switch (name) {
+    case "get_playbook": return { playbook: await readPlaybook() };
+    case "read_doc": return await readDoc(String(args.path || ""));
+    case "write_doc": return await writeDoc(args.path, args.content, args.mode || "create");
     case "list_projects": return store.projects.map(projectView);
     case "create_project": return await createProject(args);
     case "list_todos": {
@@ -370,10 +426,19 @@ async function mcpMessage(msg) {
   switch (msg.method) {
     case "initialize": {
       const asked = msg.params && msg.params.protocolVersion;
-      return reply({ protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: "projecttodo", version: "0.1.0" }, instructions: "A to-do board shared with a person. Projects hold to-dos; a to-do without a parent is a main to-do. Drafts are what the person jotted down to discuss; fill in details and move them to todo or doing after the discussion. A to-do is done only when everything under it is done. Dates are YYYY-MM-DD." });
+      return reply({ protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0], capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } }, serverInfo: { name: "projecttodo", version: "0.2.0" }, instructions: "A to-do board shared with a person. Call get_playbook first: it says how the board is worked. In short: projects hold to-dos; a to-do without a parent is a main to-do and sits on the timeline by its dates. Lanes are statuses: draft (jotted down by the person, to discuss one group at a time), todo (Next), doing (Current), done, deferred (Later). After a draft is discussed, write its plan with write_doc, put the path in doc, set owner, estimate_days and planned dates, and move it on (set_current for the one that starts now). Keep actual dates current; a to-do is done only when everything under it is done. Never delete the person's draft lines or invent estimates without asking. Dates are YYYY-MM-DD." });
     }
     case "ping": return reply({});
     case "tools/list": return reply({ tools: MCP_TOOLS });
+    case "prompts/list": return reply({ prompts: MCP_PROMPTS });
+    case "prompts/get": {
+      const name = msg.params && msg.params.name;
+      const prompt = MCP_PROMPTS.find(p => p.name === name);
+      const args = (msg.params && msg.params.arguments) || {};
+      if (!prompt) return fail(-32602, `Unknown prompt: ${name}`);
+      for (const a of prompt.arguments) if (a.required && !args[a.name]) return fail(-32602, `The prompt ${name} needs ${a.name}.`);
+      return reply({ description: prompt.description, messages: [{ role: "user", content: { type: "text", text: promptText(name, args) } }] });
+    }
     case "tools/call": {
       const name = msg.params && msg.params.name;
       try {

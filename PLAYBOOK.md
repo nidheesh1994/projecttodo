@@ -1,0 +1,133 @@
+# ProjectTodo playbook
+
+How an assistant works the board with the person. The server hands this file to any
+MCP client through the `get_playbook` tool; `skills/projecttodo/SKILL.md` points Claude
+Code at it; for other assistants, put one line in their instructions: *before working
+on the to-do board, call `get_playbook` and follow it.*
+
+## The board in one minute
+
+- A **project** holds to-dos. `list_projects` shows each project's counts and its
+  **current** main to-do.
+- A **main to-do** has no parent. It sits on the timeline by its dates and is a card on
+  the board. Everything under it (children, grandchildren) is listed inside the card.
+- **Statuses** are lanes: `draft` (Drafts: jotted down, to discuss), `todo` (Next),
+  `doing` (Current), `done`, `deferred` (Later).
+- **Owner**: `user` (the person), `assistant` (you), `both`, or none.
+- **Dates**: `planned_start` and `planned_end` are the estimate; `actual_start` and
+  `actual_done` are what happened. `estimate_days` is the size. All dates `YYYY-MM-DD`.
+- **Order**: siblings are sorted by `order` (10, 20, 30); `next_id` names the sibling
+  that follows, which the timeline draws as an arrow.
+- **doc**: the path of a markdown file with the detailed plan, relative to the docs
+  folder. The page shows it in a drawer. `read_doc` and `write_doc` read and write it.
+- **Current**: `set_current` makes one main to-do the project's current one. It goes to
+  Current and starts today. When it is done, its end is the end of its last finished
+  child.
+
+## Rules
+
+1. **Drafts belong to the person.** Never delete, rename or re-group a draft line
+   without asking. Suggest; they decide.
+2. **A to-do is done only when everything under it is done.** The server refuses
+   anything else (`children_open`). Tick the children first.
+3. **Do not invent sizes or dates.** Propose an estimate with a reason and ask; write
+   what was agreed. A main to-do with no dates is placed after the one before it, so
+   dates can wait until the order is settled.
+4. **One source of truth.** Decisions go into the to-do's document, dated, with who
+   decided. The board holds state (status, owner, dates); the document holds the why
+   and the how.
+5. **Small writes.** Change the fields that changed. Read before you write when the
+   row may have moved since you last saw it.
+
+## Session start
+
+1. `list_projects`, then `list_todos` for the project you work in.
+2. Say in two or three lines: what is current, what is next, what finished since last
+   time, how many drafts wait. Ask what the person wants to do if it is not obvious.
+
+## Reviewing drafts
+
+Take **one draft group at a time**, in board order.
+
+1. Read the group's title and lines back in your own words. Ask what each unclear
+   line means, what "done" looks like, and whether anything is missing.
+2. Propose a shape: which lines stay, which merge, which split, which go to Later,
+   which are not to-dos at all (notes, questions). Wait for the answer.
+3. For the agreed group:
+   - write the plan document with `write_doc` (template below) and put its path in
+     the group's `doc`;
+   - set `owner`, `estimate_days`, `planned_start` and `planned_end` (or leave the
+     dates empty to place it after the previous main to-do);
+   - move the group to `todo`, or `doing` through `set_current` if it starts now;
+   - give each child `status: todo`, an `owner`, an `estimate_days`, and chain the
+     order with `next_id`; children that wait go to `deferred`.
+4. Lines the person wants dropped: ask once, then `delete_todo`.
+5. Say what you changed, in one short list.
+
+## Planning a to-do
+
+When a to-do needs a plan (any main to-do; a child when it is big):
+
+1. `get_todo` for the fields, `read_doc` if it already has a document.
+2. Write or update the document. Keep the Plan section as a checklist that mirrors the
+   child to-dos, one line each, so the board and the document say the same thing.
+3. Record every decision under **Decisions** with the date and who decided.
+4. Set the fields on the board to match (estimate, dates, owner, doc).
+
+## While work happens
+
+- Starting a main to-do: `set_current`. Starting a child: `status: doing` and
+  `actual_start` today.
+- Finishing a child: `status: done` and `actual_done` today. Add a dated line to the
+  document's **Progress** section when something notable happened (a decision, a
+  surprise, a change of estimate).
+- Finishing a main to-do: only after every child is done; then `status: done` and
+  `actual_done`.
+- Blocked or postponed: `deferred`, and a Progress line that says why and what would
+  unblock it.
+- Re-estimating: change `estimate_days` and `planned_end`, and say so in Progress.
+  Keep the original estimate in the text so the drift stays visible.
+
+## Daily review
+
+1. `list_todos`. Report: finished yesterday, current and how far along, next up, what
+   slipped (planned end in the past and not done), how many drafts wait.
+2. Update what the person tells you: dates, statuses, owners.
+3. Offer to review the oldest draft group if there are any.
+
+## Writing style
+
+- Titles: short, imperative, no trailing period ("Add the export button").
+- `notes`: one or two sentences of context that belong on the card.
+- Documents: plain markdown, short sections, dated entries. Say who decided what.
+- Say what you changed after you change it. Never report a write that failed as done;
+  quote the server's message instead.
+
+## Document template
+
+Use this for `write_doc`. Name the file after the to-do (`export-button.md`), lower
+case, dashes for spaces.
+
+```markdown
+# <Title>
+
+**Why:** one paragraph on the problem or the goal.
+**Owner:** user | assistant | both. **Estimate:** N days. **Status:** as on the board.
+
+## Scope
+- In: …
+- Out: …
+
+## Plan
+- [ ] Step one (child to-do)
+- [ ] Step two (child to-do)
+
+## Decisions
+- YYYY-MM-DD (who): what was decided and why.
+
+## Open questions
+- …
+
+## Progress
+- YYYY-MM-DD: what happened.
+```

@@ -63,6 +63,7 @@ restarts by hand:
 | `HOST` | `127.0.0.1` | the address; `0.0.0.0` to reach it from other machines |
 | `PROJECTTODO_DATA_DIR` | `./data` | where `todos.json` lives (commit it to your own repo if you like) |
 | `PROJECTTODO_DOCS_DIR` | the data dir's parent | a to-do's `doc` is a markdown file under this folder, shown in a drawer |
+| `PROJECTTODO_DOC_WRITE_DIR` | `todos` (inside the docs dir) | where the assistant's `write_doc` may create markdown files (`--write-docs`) |
 | `PROJECTTODO_DEFAULT_PROJECT` | `My project` | the project made for rows from before projects existed |
 | `PROJECTTODO_DEV` | unset | `1` watches the files and restarts (the `--dev` flag) |
 
@@ -91,8 +92,38 @@ Clients that need a public HTTPS address (a hosted ChatGPT connector, for exampl
 a tunnel in front of it; the server has no login, so keep it on your own machine or
 behind one.
 
-Tools: `list_projects`, `create_project`, `list_todos`, `get_todo`, `create_todo`,
-`update_todo`, `delete_todo`, `set_current`, `add_draft`.
+Tools: `get_playbook`, `list_projects`, `create_project`, `list_todos`, `get_todo`,
+`create_todo`, `update_todo`, `delete_todo`, `set_current`, `add_draft`, `read_doc`,
+`write_doc`. Prompts (clients that list MCP prompts, such as Claude Desktop, offer them
+as commands): `review_drafts`, `plan_todo`, `daily_review`.
+
+## Teach your assistant the workflow
+
+Connecting the server tells an assistant what the tools are, not how you want the board
+worked. That lives in one file, [PLAYBOOK.md](PLAYBOOK.md): the lanes, the rules (drafts
+belong to the person; a to-do is done only when everything under it is done; no invented
+estimates), how to review draft groups one at a time, how to plan a to-do with a
+document, and the document template. The server sends a summary when a client connects,
+and the `get_playbook` tool returns the whole file, so every MCP client can read it.
+
+- **Claude Code**: install the skill once, and Claude calls `get_playbook` whenever the
+  board comes up:
+
+  ```bash
+  mkdir -p ~/.claude/skills && cp -r /path/to/projecttodo/skills/projecttodo ~/.claude/skills/
+  ```
+
+  (or copy it into a project's `.claude/skills/` to keep it per repository).
+- **Claude Desktop**: the summary arrives with the connection; the prompts above appear
+  as commands.
+- **Anything else** (a ChatGPT connector, another agent): add one line to its
+  instructions: *Before working on the to-do board, call the projecttodo tool
+  `get_playbook` and follow it.*
+
+Plan documents are markdown files the assistant writes with `write_doc` into the write
+folder (`--write-docs`, default `todos/` under the docs folder) and links through the
+to-do's `doc` field; the page shows them in the drawer, and `read_doc` reads them back.
+Edit the playbook to fit how you work; the assistant reads it fresh each time.
 
 ## Rows
 

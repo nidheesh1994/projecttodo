@@ -4,6 +4,7 @@
 #   --host H        HOST                          default 127.0.0.1 (0.0.0.0 for other machines)
 #   --data DIR      PROJECTTODO_DATA_DIR          where todos.json lives, default ./data
 #   --docs DIR      PROJECTTODO_DOCS_DIR          a to-do's doc path is read from here
+#   --write-docs DIR PROJECTTODO_DOC_WRITE_DIR    where the assistant's write_doc may create files, inside --docs (default todos)
 #   --project NAME  PROJECTTODO_DEFAULT_PROJECT   the project made for rows from before projects existed
 #   --dev           PROJECTTODO_DEV=1             restart when server.mjs or public/ change; open pages reload themselves
 # Example:  ./start.sh --port 3004 --data ~/notes/todos --docs ~/notes
@@ -12,7 +13,7 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
-  sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 while [[ $# -gt 0 ]]; do
@@ -21,6 +22,7 @@ while [[ $# -gt 0 ]]; do
     --host) HOST="$2"; shift 2 ;;
     --data) PROJECTTODO_DATA_DIR="$2"; shift 2 ;;
     --docs) PROJECTTODO_DOCS_DIR="$2"; shift 2 ;;
+    --write-docs) PROJECTTODO_DOC_WRITE_DIR="$2"; shift 2 ;;
     --project) PROJECTTODO_DEFAULT_PROJECT="$2"; shift 2 ;;
     --dev) PROJECTTODO_DEV=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -41,6 +43,7 @@ fi
 export PORT="${PORT:-3004}" HOST="${HOST:-127.0.0.1}"
 [[ -n "${PROJECTTODO_DATA_DIR:-}" ]] && export PROJECTTODO_DATA_DIR
 [[ -n "${PROJECTTODO_DOCS_DIR:-}" ]] && export PROJECTTODO_DOCS_DIR
+[[ -n "${PROJECTTODO_DOC_WRITE_DIR:-}" ]] && export PROJECTTODO_DOC_WRITE_DIR
 [[ -n "${PROJECTTODO_DEFAULT_PROJECT:-}" ]] && export PROJECTTODO_DEFAULT_PROJECT
 
 if [[ "${PROJECTTODO_DEV:-0}" == "1" ]]; then
