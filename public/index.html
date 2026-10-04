@@ -154,9 +154,12 @@ section { margin-top: 26px; }
 .counts { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
 
 /* Board */
-.board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
-@media (max-width: 1040px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .board { grid-template-columns: 1fr; } }
+/* Four units across: Drafts takes two, Now and Next one each; Done and Later sit beyond the right edge and scroll in. */
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 36px) / 4); gap: 12px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; }
+.lane { scroll-snap-align: start; }
+.lane[data-lane="draft"] { grid-column: span 2; }
+@media (max-width: 1040px) { .board { grid-auto-columns: calc((100% - 12px) / 2); } .lane[data-lane="draft"] { grid-column: span 2; } }
+@media (max-width: 600px) { .board { grid-auto-columns: 100%; } .lane[data-lane="draft"] { grid-column: span 1; } }
 .lane { background: var(--surface-2); border-radius: 10px; padding: 8px; min-width: 0; display: flex; flex-direction: column; }
 .lane-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 8px; }
 .lane-title { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; }
@@ -199,6 +202,9 @@ section { margin-top: 26px; }
 
 /* Timeline */
 .tl-panel { background: var(--surface); border-radius: 10px; box-shadow: var(--shadow); overflow-x: auto; min-width: 0; }
+.zoom { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
+.zoom .icon-btn { font-size: 15px; padding: 1px 7px; }
+.zoom-level { border: 0; background: transparent; color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; cursor: pointer; padding: 2px 4px; min-width: 42px; }
 svg.tl { display: block; font-family: var(--font-ui); }
 .tl text { fill: var(--fg); font-size: 12px; }
 .tl .axis text { fill: var(--muted); font-size: 11px; font-family: var(--font-mono); }
@@ -242,6 +248,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
 .tl .days { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; font-weight: 400; }
 .tl .today-line { stroke: var(--today); stroke-dasharray: 3 3; stroke-width: 1.5; }
 .tl .today-lbl { fill: var(--today); font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+.tl .now-hit rect { fill: transparent; cursor: help; pointer-events: all; }
+.tl .now-hit:hover ~ .today-line, .tl .now-hit:hover rect { fill: color-mix(in srgb, var(--today) 18%, transparent); }
 .tl .node { cursor: pointer; }
 .tl .node:hover .bar, .tl .node:focus-visible .bar { filter: brightness(1.12); }
 .tl .node:focus-visible { outline: none; }
@@ -328,7 +336,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
   </section>
 
   <section id="timeline">
-    <div class="sec-head"><h2>Timeline</h2><span class="counts" id="tl-counts"></span></div>
+    <div class="sec-head"><h2>Timeline</h2><span class="zoom" role="group" aria-label="Zoom"><button class="icon-btn" id="tl-out" type="button" title="Zoom out (Cmd and minus, or Cmd and scroll)" aria-label="Zoom out">−</button><button class="zoom-level" id="tl-zoom" type="button" title="Back to 100%">100%</button><button class="icon-btn" id="tl-in" type="button" title="Zoom in (Cmd and plus, or Cmd and scroll)" aria-label="Zoom in">+</button></span><span class="counts" id="tl-counts"></span></div>
     <div class="tl-panel" id="tl-wrap"><div class="empty">Loading…</div></div>
     <div class="legend" aria-label="Legend">
       <span><i class="sw done"></i>Done</span>
@@ -461,6 +469,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
     projects: [],
     view: "projects",
     expanded: new Set(),   // done cards opened out fully (per viewer)
+    tlZoom: 1,
+    tlScrolled: false,
+    tlNow: null,
     snapshots: {},
     dragId: null,
     editing: null,
@@ -952,6 +963,39 @@ svg.tl { display: block; font-family: var(--font-ui); }
     return s ? { planned_start: dayStr(s.start), planned_end: dayStr(s.end) } : {};
   }
 
+  // ---------- zoom: the days and columns grow or shrink; the view keeps its place ----------
+  const ZOOMS = [0.4, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 3];
+  try { const z = Number(localStorage.getItem("projecttodo-zoom")); if (ZOOMS.includes(z)) state.tlZoom = z; } catch (e) { /* fine */ }
+  function tlZoomTo(z) {
+    const wrap = $("#tl-wrap");
+    const before = state.tlZoom || 1;
+    const centre = (wrap.scrollLeft + wrap.clientWidth / 2) / before;
+    state.tlZoom = z;
+    try { localStorage.setItem("projecttodo-zoom", String(z)); } catch (e) { /* fine */ }
+    $("#tl-zoom").textContent = `${Math.round(z * 100)}%`;
+    renderTimeline(index());
+    wrap.scrollLeft = Math.max(0, centre * z - wrap.clientWidth / 2);
+  }
+  const tlZoomStep = dir => { const i = ZOOMS.indexOf(state.tlZoom || 1); tlZoomTo(ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, (i < 0 ? 4 : i) + dir))]); };
+  $("#tl-in").addEventListener("click", () => tlZoomStep(1));
+  $("#tl-out").addEventListener("click", () => tlZoomStep(-1));
+  $("#tl-zoom").addEventListener("click", () => tlZoomTo(1));
+  $("#tl-zoom").textContent = `${Math.round((state.tlZoom || 1) * 100)}%`;
+  $("#tl-wrap").addEventListener("wheel", e => { if (!(e.metaKey || e.ctrlKey)) return; e.preventDefault(); tlZoomStep(e.deltaY < 0 ? 1 : -1); }, { passive: false });
+  document.addEventListener("keydown", e => {
+    if (state.view !== "tree" || !(e.metaKey || e.ctrlKey) || e.target.closest("input, textarea, [contenteditable]")) return;
+    if (e.key === "=" || e.key === "+") { e.preventDefault(); tlZoomStep(1); }
+    else if (e.key === "-") { e.preventDefault(); tlZoomStep(-1); }
+    else if (e.key === "0") { e.preventDefault(); tlZoomTo(1); }
+  });
+
+  // Every minute the "now" line moves on; past midnight the whole timeline is drawn again.
+  setInterval(() => {
+    if (!state.tlNow) return;
+    if (parseDay(todayStr()) !== state.tlNow.today) { state.tlNow = null; render(); return; }
+    state.tlNow.placeNow();
+  }, 60000);
+
   // ---------- the timeline: dates along the top; each main to-do spans its days, its tree hangs under it ----------
   function renderTimeline(idx) {
     const wrap = $("#tl-wrap");
@@ -976,7 +1020,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const measure = id => { let w = 0, h = 0; for (const k of kidsOf(id)) { const sz = measure(k.id); w += sz.w; h = Math.max(h, sz.h); } const out = { w: Math.max(1, w), h: 1 + h }; size.set(id, out); return out; };
     for (const m of mains) measure(m.id);
     // a day under a main to-do is as wide as its share of the tree needs
-    const SLOT = 156, MINDAY = 30, BOX_H = 42, ROW_H = 62, GAP = 8, AXIS_H = 48, PAD = 16, FOOT = 22;
+    const z = state.tlZoom || 1;   // zoom scales the days and the columns; the rows keep their height
+    const SLOT = Math.round(156 * z), MINDAY = Math.round(30 * z), BOX_H = 42, ROW_H = 62, GAP = 8, AXIS_H = 48, PAD = 16, FOOT = 22;
     const dayW = new Map();
     for (let d = min; d <= max; d++) dayW.set(d, MINDAY);
     for (const sp of mainList) { const n = sp.end - sp.start + 1; const need = Math.ceil(size.get(sp.it.id).w / n) * SLOT; for (let d = sp.start; d <= sp.end; d++) dayW.set(d, Math.max(dayW.get(d), need)); }
@@ -1048,9 +1093,24 @@ svg.tl { display: block; font-family: var(--font-ui); }
         svg.append(svgEl("path", { class: `edge next ${cls}`, d: `M${b.x + b.w - GAP},${b.y + BOX_H / 2} H${nb.x}`, "marker-end": `url(#arrow-${cls})` }));
       }
     }
-    const tx = X.get(today) + dayW.get(today) / 2;
-    svg.append(svgEl("line", { class: "today-line", x1: tx, y1: AXIS_H - 4, x2: tx, y2: height - FOOT + 4 }));
-    svg.append(svgText(tx, height - 6, "Today", { class: "today-lbl", "text-anchor": "middle" }));
+    // the time of day, as a line that walks across today's column; its time shows when you hover it
+    const nowX = () => { const d = new Date(); return X.get(today) + dayW.get(today) * ((d.getHours() * 60 + d.getMinutes()) / 1440); };
+    const nowLine = svgEl("line", { class: "today-line", x1: nowX(), y1: AXIS_H - 4, x2: nowX(), y2: height - FOOT + 4 });
+    const nowHit = svgEl("g", { class: "now-hit" });
+    const nowBand = svgEl("rect", { x: nowX() - 6, y: AXIS_H - 4, width: 12, height: height - AXIS_H - FOOT + 8 });
+    const nowTip = svgEl("title");
+    nowHit.append(nowBand, nowTip);
+    const nowLbl = svgText(nowX(), height - 6, "Today", { class: "today-lbl", "text-anchor": "middle" });
+    svg.append(nowLine, nowLbl, nowHit);
+    const placeNow = () => {
+      const x = nowX(), t = new Date();
+      nowLine.setAttribute("x1", x); nowLine.setAttribute("x2", x);
+      nowBand.setAttribute("x", x - 6);
+      nowLbl.setAttribute("x", x);
+      nowTip.textContent = `Now ${pad2(t.getHours())}:${pad2(t.getMinutes())} · ${fmtDay(dayStr(today))}`;
+    };
+    placeNow();
+    state.tlNow = { placeNow, today };
     graph.append(svg);
 
     for (const b of boxes) {
@@ -1076,6 +1136,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
       graph.append(node);
     }
     wrap.replaceChildren(graph);
+    // today in view when the page opens
+    if (!state.tlScrolled) { state.tlScrolled = true; wrap.scrollLeft = Math.max(0, nowX() - wrap.clientWidth / 3); }
     const noDates = mainList.filter(sp => sp.kind === "auto").length;
     $("#tl-counts").textContent = `${boxes.length} items · ${mains.length} main · ${noDates} without dates`;
   }

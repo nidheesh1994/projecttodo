@@ -11,6 +11,8 @@ to-dos you see.
   for a child, Shift+Tab back out. "Add" makes one draft card with those lines. You go
   through the drafts with your assistant; it fills in the details and moves them on.
   Drag cards between lanes. Done cards fold to one row with an arrow to open them out.
+  Drafts is twice as wide as the other lanes; Done and Later sit past the right edge and
+  scroll into view.
 - **Timeline**: dates along the top. A main to-do (one without a parent) spans its days;
   its to-dos hang under it, siblings left to right, children below their parent, in as
   many columns as its days allow. A main to-do with no dates is placed after the one
@@ -18,6 +20,9 @@ to-dos you see.
   differ. The project's **current** main to-do is outlined: setting it starts it today;
   when it is done, its end is the end of the last finished to-do under it. So by
   finishing things, every to-do ends up with its real dates.
+  The timeline opens on today, a line walks across today's column with the time (hover it
+  to read it), and the view zooms with the − and + buttons, Cmd and scroll, or Cmd and
+  minus, plus and 0.
 - **Live**: every change saves at once and shows up for everyone with the page open.
 
 ## Run it
