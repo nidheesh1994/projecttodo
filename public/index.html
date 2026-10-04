@@ -1098,22 +1098,34 @@ svg.tl { display: block; font-family: var(--font-ui); }
   // ---------- zoom: the days and columns grow or shrink; the view keeps its place ----------
   const ZOOMS = [0.4, 0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 3];
   try { const z = Number(localStorage.getItem("projecttodo-zoom")); if (ZOOMS.includes(z)) state.tlZoom = z; } catch (e) { /* fine */ }
-  function tlZoomTo(z) {
+  // Zooming keeps one point still: the one under the pointer (Cmd and scroll), or the middle of the view (buttons, keys).
+  function tlZoomTo(z, clientX) {
     const wrap = $("#tl-wrap");
     const before = state.tlZoom || 1;
-    const centre = (wrap.scrollLeft + wrap.clientWidth / 2) / before;
+    const rect = wrap.getBoundingClientRect();
+    const offset = typeof clientX === "number" ? Math.max(0, Math.min(wrap.clientWidth, clientX - rect.left)) : wrap.clientWidth / 2;
+    const anchor = (wrap.scrollLeft + offset) / before;   // the chart position under the anchor, at zoom 1
     state.tlZoom = z;
     try { localStorage.setItem("projecttodo-zoom", String(z)); } catch (e) { /* fine */ }
     $("#tl-zoom").textContent = `${Math.round(z * 100)}%`;
     renderTimeline(index());
-    wrap.scrollLeft = Math.max(0, centre * z - wrap.clientWidth / 2);
+    wrap.scrollLeft = Math.max(0, anchor * z - offset);
   }
-  const tlZoomStep = dir => { const i = ZOOMS.indexOf(state.tlZoom || 1); tlZoomTo(ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, (i < 0 ? 4 : i) + dir))]); };
+  const tlZoomStep = (dir, clientX) => { const i = ZOOMS.indexOf(state.tlZoom || 1); tlZoomTo(ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, (i < 0 ? 4 : i) + dir))], clientX); };
   $("#tl-in").addEventListener("click", () => tlZoomStep(1));
   $("#tl-out").addEventListener("click", () => tlZoomStep(-1));
   $("#tl-zoom").addEventListener("click", () => tlZoomTo(1));
   $("#tl-zoom").textContent = `${Math.round((state.tlZoom || 1) * 100)}%`;
-  $("#tl-wrap").addEventListener("wheel", e => { if (!(e.metaKey || e.ctrlKey)) return; e.preventDefault(); tlZoomStep(e.deltaY < 0 ? 1 : -1); }, { passive: false });
+  let wheelAt = 0;
+  $("#tl-wrap").addEventListener("wheel", e => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    e.preventDefault();
+    // a trackpad sends many small ticks: one step per 80 ms, at the pointer
+    const now = Date.now();
+    if (now - wheelAt < 80) return;
+    wheelAt = now;
+    tlZoomStep(e.deltaY < 0 ? 1 : -1, e.clientX);
+  }, { passive: false });
   document.addEventListener("keydown", e => {
     if (state.view !== "tree" || !(e.metaKey || e.ctrlKey) || e.target.closest("input, textarea, [contenteditable]")) return;
     if (e.key === "=" || e.key === "+") { e.preventDefault(); tlZoomStep(1); }
