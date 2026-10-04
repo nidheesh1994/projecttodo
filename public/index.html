@@ -205,7 +205,14 @@ code { font-family: var(--font-mono); }
 .chip.status-doing { border-color: var(--accent); color: var(--fg); }
 .chip.status-done { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); }
 .chip.status-draft, .chip.status-deferred { border-style: dashed; }
-.dv-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 16px; margin: 16px 0 0; font-size: 13px; }
+.dv-top { display: grid; grid-template-columns: minmax(0, 1fr) max-content; gap: 12px 24px; margin-top: 16px; align-items: start; }
+@media (max-width: 560px) { .dv-top { grid-template-columns: 1fr; } }
+.dv-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 16px; margin: 0; font-size: 13px; align-self: start; }
+.dv-dates { display: grid; grid-template-columns: max-content max-content; gap: 6px 14px; margin: 0; font-size: 12.5px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.dv-dates dt { color: var(--muted); }
+.dv-dates dd { margin: 0; font-family: var(--font-mono); font-size: 12px; text-align: right; }
+.dv-dates dd.unset { color: var(--muted); }
+.dv-dates .dv-days { grid-column: 1 / -1; color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; padding-top: 2px; border-top: 1px solid var(--line); }
 .dv-grid dt { color: var(--muted); }
 .dv-grid dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .dv-grid dd .mono { font-family: var(--font-mono); font-size: 12px; }
@@ -240,6 +247,7 @@ section { margin-top: 26px; }
 .cards { display: flex; flex-direction: column; gap: 8px; min-height: 48px; flex: 1; border-radius: 8px; }
 .lane.over .cards { outline: 2px dashed var(--accent); outline-offset: 3px; }
 .card { background: var(--surface); border-radius: 8px; padding: 9px 10px 8px; box-shadow: var(--shadow); cursor: pointer; min-width: 0; border-left: 3px solid transparent; }
+.card .card-top { cursor: pointer; }
 .card.compact { padding: 6px 8px 6px 10px; }
 .card.compact .card-top { align-items: center; gap: 8px; }
 .card.compact .card-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 0; }
@@ -442,7 +450,10 @@ svg.tl { display: block; font-family: var(--font-ui); }
       <div class="dv-titles"><div class="dv-eyebrow" id="dv-eyebrow"></div><h3 id="dv-title"></h3></div>
       <div class="dv-pills" id="dv-pills"></div>
     </div>
-    <dl class="dv-grid" id="dv-grid"></dl>
+    <div class="dv-top">
+      <dl class="dv-grid" id="dv-grid"></dl>
+      <dl class="dv-dates" id="dv-dates"></dl>
+    </div>
     <div class="dv-notes" id="dv-notes" hidden></div>
     <div class="dv-doc" id="dv-doc" hidden></div>
     <div class="dv-kids" id="dv-kids" hidden></div>
@@ -851,10 +862,6 @@ svg.tl { display: block; font-family: var(--font-ui); }
     persistCollapsed();
     render();
   }
-  function foldButton(id, laneKey) {
-    const folded = isFolded(id, laneKey);
-    return el("button", { class: "icon-btn tog", type: "button", title: folded ? "Open the card out" : "Fold the card to one row", "aria-label": folded ? "Open the card out" : "Fold the card", "aria-expanded": String(!folded), onclick: e => { e.stopPropagation(); toggleFold(id, laneKey); } }, folded ? "⌄" : "⌃");
-  }
   // What a folded card shows beside its title: when it finished, how long it has been going, or its estimate.
   function compactMeta(it, st) {
     const d = durations(it);
@@ -878,7 +885,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
       role: "button",
       "aria-label": `${it.title || "Untitled"}, ${ctx.lane.label}`,
     });
-    card.addEventListener("click", e => { if (e.target.closest("button, a")) return; openEditor(it.id); });
+    // The header folds and opens the card; the rest of it opens the form.
+    card.addEventListener("click", e => { if (e.target.closest("button, a")) return; if (compact || e.target.closest(".card-top")) toggleFold(it.id, ctx.lane.key); else openEditor(it.id); });
     card.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === card) openEditor(it.id); });
     card.addEventListener("dragstart", e => {
       state.dragId = it.id;
@@ -901,12 +909,11 @@ svg.tl { display: block; font-family: var(--font-ui); }
     }
     top.append(el("div", { class: "card-title", text: it.title || "Untitled" }));
     if (compact) {
-      top.append(el("span", { class: "when", text: compactMeta(it, st) }), foldButton(it.id, ctx.lane.key));
+      top.append(el("span", { class: "when", text: compactMeta(it, st) }));
       card.append(top);
       return card;
     }
     const ctl = el("div", { class: "ctl" });
-    ctl.append(foldButton(it.id, ctx.lane.key));
     if (!state.readOnly) {
       ctl.append(
         el("button", { class: "icon-btn", type: "button", title: "Move up among its siblings", "aria-label": "Move up", onclick: e => { e.stopPropagation(); moveSibling(it.id, -1); } }, "↑"),
@@ -1294,10 +1301,17 @@ svg.tl { display: block; font-family: var(--font-ui); }
     grid.replaceChildren();
     const row = (label, value) => { if (value === null || value === undefined || value === "") return; grid.append(el("dt", { text: label }), el("dd", {}, typeof value === "string" ? el("span", { text: value }) : value)); };
     const d = durations(it);
-    const estDays = d.est !== null ? `${d.est} d` : "";
-    if (it.planned_start || it.planned_end) row("Estimated", `${rangeText(it.planned_start, it.planned_end)}${estDays ? ` · ${estDays}` : ""}`);
-    else if (estDays) row("Estimate", estDays);
-    if (it.actual_start || it.actual_done) row("Actual", `${rangeText(it.actual_start, it.actual_done, st === "doing" ? "today" : "")}${d.actual !== null ? ` · ${d.open ? `${d.actual} d so far` : `${d.actual} d`}` : ""}`);
+    // the four dates, on the right; "-" where none is set
+    const dates = $("#dv-dates");
+    dates.replaceChildren();
+    for (const [label, value] of [["Estimated start", it.planned_start], ["Estimated end", it.planned_end], ["Actual start", it.actual_start], ["Actual end", it.actual_done]]) {
+      const text = parseDay(value) === null ? "" : fmtDay(value);
+      dates.append(el("dt", { text: label }), el("dd", { class: text ? "" : "unset", text: text || "-" }));
+    }
+    const days = [];
+    if (d.est !== null) days.push(`est ${d.est} d`);
+    if (d.actual !== null) days.push(d.open ? `${d.actual} d so far` : `took ${d.actual} d`);
+    if (days.length) dates.append(el("div", { class: "dv-days", text: days.join(" · ") }));
     if (!parent && !it.planned_start && !it.planned_end && !it.actual_start && st !== "draft") {
       const sp = mainSpans(idx, orderedKids(idx, null).filter(m => statusOf(m) !== "draft"), today).find(x => x.it.id === it.id);
       if (sp) row("Placed", `${fmtDay(dayStr(sp.start))} to ${fmtDay(dayStr(sp.end))}, after the main to-do before it (dates not set)`);
@@ -1674,7 +1688,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const compact = isFolded(it.id, lane.key);
     const card = el("article", { class: `card draft group${compact ? " compact" : ""}`, "data-id": it.id, draggable: state.readOnly ? null : "true", tabindex: "0", role: "button", "aria-label": `${it.title || "Untitled"}, ${lane.label}` });
     const open = () => openDraftModal({ groupId: it.id });
-    card.addEventListener("click", e => { if (e.target.closest("button, a, .note-check")) return; open(); });
+    card.addEventListener("click", e => { if (e.target.closest("button, a, .note-check")) return; if (compact || e.target.closest(".card-top")) toggleFold(it.id, lane.key); else open(); });
     card.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === card) open(); });
     if (!state.readOnly) {
       card.addEventListener("dragstart", e => { state.dragId = it.id; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", it.id); } catch (err) { /* older engines */ } card.classList.add("dragging"); });
@@ -1695,7 +1709,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     }
     card.append(...[
       outside ? el("div", { class: "eyebrow", text: `in ${outside.title || "a to-do"}` }) : null,
-      el("div", { class: "card-top" }, el("div", { class: "card-title", text: it.title || "Untitled" }), compact ? el("span", { class: "when", text: lines.length ? `${ticked} of ${lines.length}` : "" }) : null, state.readOnly || compact ? null : el("button", { class: "icon-btn", type: "button", title: "Edit the draft", "aria-label": "Edit the draft", onclick: e => { e.stopPropagation(); open(); } }, "✎"), foldButton(it.id, lane.key)),
+      el("div", { class: "card-top" }, el("div", { class: "card-title", text: it.title || "Untitled" }), compact ? el("span", { class: "when", text: lines.length ? `${ticked} of ${lines.length}` : "" }) : null, state.readOnly || compact ? null : el("button", { class: "icon-btn", type: "button", title: "Edit the draft", "aria-label": "Edit the draft", onclick: e => { e.stopPropagation(); open(); } }, "✎")),
       compact ? null : el("div", { class: "meta" }, el("span", { class: `chip owner-${it.owner || "none"}`, text: OWNER_LABEL[it.owner] || "Draft" }), lines.length ? el("span", { class: "mono", text: `${ticked} of ${lines.length} ticked` }) : null),
       compact ? null : (lines.length ? list : el("div", { class: "empty", text: "No lines yet. Open it to add some." })),
     ].filter(Boolean));

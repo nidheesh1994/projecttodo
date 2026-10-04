@@ -12,8 +12,9 @@ to-dos you see.
   "New draft") and type a title and a list like a notepad: Enter for the next line, Tab
   for a child, Shift+Tab back out. "Add" makes one draft card with those lines. You go
   through the drafts with your assistant; it fills in the details and moves them on.
-  Drag cards between lanes. Every card folds to one row with its arrow (Done cards start
-  folded), and each lane's header has an arrow that folds or opens every card in it.
+  Drag cards between lanes. Click a card's header to fold it to one row or open it
+  again (Done cards start folded); click its body to edit it. Each lane's header has an
+  arrow that folds or opens every card in it.
   Drafts is twice as wide as the other lanes; Done and Later sit past the right edge and
   scroll into view.
 - **Timeline**: dates along the top. A main to-do (one without a parent) spans its days;
