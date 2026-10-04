@@ -23,8 +23,11 @@ to-dos you see.
   and moves them on.
   A card is a main to-do; everything under it is listed inside the card, ticked when
   done. Drag cards between lanes. Click a card's header to fold it to one row or open
-  it again (Done and Later cards start folded); double-click the header to edit the
-  main to-do, click a line to edit that to-do, and click its circle to tick it done.
+  it again (Done and Later cards start folded); click the card's body or a line to see
+  that to-do's details, with an Edit button there; double-click the header to edit the
+  main to-do straight away; click a line's circle to tick it done.
+  The + on a card, or in the details view, opens the pad without a title field: its lines
+  become to-dos under that one, in its lane, with Tab making a child of the line above.
   A card cannot go to Done until every line in it is ticked. Each lane's header has an
   arrow that folds or opens every card in it, and a colour dot that colours the lane;
   drag a lane's header to move the lane. Order and colours are kept on the project.
@@ -186,7 +189,8 @@ Estimates are days; under a day they show as hours at 8 hours a day, and the edi
 "2 d", "3 h" or "90 m". A status change to Current or Done stamps the actual date and the
 time of day, on the page and on the server, so a to-do that started at 12:43 and ended at
 15:20 reads "4 Oct 12:43 to 15:20 · 2 h 37 m" on its card and sits by the hour on the
-timeline. Dropping a card in Current sets `actual_start` when empty; in Done sets `actual_done` (for a
+timeline. A to-do that finishes goes to the top of Done, above the ones finished before it (move it
+afterwards if you like). Dropping a card in Current sets `actual_start` when empty; in Done sets `actual_done` (for a
 main to-do, the end of its last finished child) and `actual_start` when empty; leaving
 Done clears `actual_done`. A to-do can be set done only when everything under it is done:
 the page checks this on drops, in the editor and on the ticks, and the server refuses such

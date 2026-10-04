@@ -639,6 +639,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     <div class="dv-kids" id="dv-kids" hidden></div>
     <div class="dialog-actions">
       <span class="spacer"></span>
+      <button class="btn" type="button" id="dv-add" title="Add to-dos under it" aria-label="Add to-dos under it">+</button>
       <button class="btn" type="button" id="dv-close">Close</button>
       <button class="btn primary" type="button" id="dv-edit">Edit</button>
     </div>
@@ -1010,8 +1011,11 @@ svg.tl { display: block; font-family: var(--font-ui); }
       if (was === "draft" || laneKey === "draft") for (const r of idx.rows.filter(r => r.anc.includes(it.id) && statusOf(r.it) === was)) addPatch(patches, r.it.id, { status: laneKey, ...statusDates(r.it, laneKey) });
     }
     const parent = idx.parentOf(it);
-    const target = beforeId ? idx.byId.get(beforeId) : null;
-    if (target && target.id !== it.id) {
+    const toTop = laneKey === "done" && was !== "done";   // a drop into Done: the server puts it first among the finished ones
+    const target = toTop ? null : (beforeId ? idx.byId.get(beforeId) : null);
+    if (toTop) {
+      // no reorder here
+    } else if (target && target.id !== it.id) {
       if (idx.parentOf(target) === parent) {
         const sibs = siblingsOf(idx, parent).filter(s => s.id !== it.id);
         const at = sibs.findIndex(s => s.id === target.id);
@@ -1771,6 +1775,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     kidsBox.hidden = !under.length;
     $("#dv-edit").hidden = state.readOnly;
     $("#dv-edit").onclick = () => { closeDetails(); openEditor(it.id); };
+    $("#dv-add").hidden = state.readOnly || st === "draft";
+    $("#dv-add").onclick = () => { closeDetails(); openDraftModal({ parentId: it.id }); };
     $("#dv").hidden = false;
     setTimeout(() => $("#dv-close").focus(), 0);
   }
@@ -1969,8 +1975,10 @@ svg.tl { display: block; font-family: var(--font-ui); }
       for (const r of idx.rows.filter(r => r.anc.includes(group.id))) dm.lines.push(dmLine(r.it.title || "", Math.max(0, r.depth - base.depth - 1), r.it.id));
     }
     if (!dm.lines.length) dm.lines.push(dmLine());
-    $("#dm-heading").textContent = group ? "Edit the draft" : (dm.parentId ? `New draft under ${idx.byId.get(dm.parentId).title || "this to-do"}` : "New draft");
+    dm.under = !group && !!dm.parentId;   // adding under a to-do: no title, the lines become its children
+    $("#dm-heading").textContent = group ? "Edit the draft" : (dm.under ? `Add under ${idx.byId.get(dm.parentId).title || "this to-do"}` : "New draft");
     $("#dm-name").value = group ? (group.title || "") : "";
+    $("#dm-name").hidden = dm.under;
     $("#dm-save").textContent = group ? "Save" : "Add";
     $("#dm-save").disabled = state.readOnly;
     $("#dm-delete").hidden = !group || state.readOnly;
@@ -1978,7 +1986,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     dm.focus = { index: 0, caret: 0 };
     renderDraftLines(false);
     $("#dm").hidden = false;
-    setTimeout(() => { if (group) focusLine(0, 0); else $("#dm-name").focus(); }, 0);
+    setTimeout(() => { if (group || dm.under) focusLine(0, 0); else $("#dm-name").focus(); }, 0);
   }
   function closeDraftModal() { $("#dm").hidden = true; }
   function focusLine(i, caret) {
@@ -2163,12 +2171,17 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const row = (id, text, parentId, order) => ({ id, project_id: state.project, title: text, notes: "", parent_id: parentId, next_id: null, order, status: "draft", owner: "user", doc: null, estimate_days: null, planned_start: null, planned_end: null, actual_start: null, actual_done: null, created_at: stamp, updated_at: stamp });
     const writes = [];
     const group = dm.groupId ? idx.byId.get(dm.groupId) : null;
-    if (!title && !lines.length) { toast("Type a title or a line first.", true); $("#dm-name").focus(); return; }
-    let groupId = group ? group.id : unique(newId(title || "draft"));
-    if (!group) writes.push({ op: "set", data: row(groupId, title, dm.parentId, nextOrderOf(siblingsOf(idx, dm.parentId))) });
-    else if ((group.title || "") !== title) writes.push({ op: "update", id: group.id, if_version: group.version, data: { title, updated_at: stamp } });
+    if (dm.under && !lines.length) { toast("Type a line first.", true); focusLine(0, 0); return; }
+    if (!dm.under && !title && !lines.length) { toast("Type a title or a line first.", true); $("#dm-name").focus(); return; }
+    let groupId = group ? group.id : (dm.under ? dm.parentId : unique(newId(title || "draft")));
+    if (!group && !dm.under) writes.push({ op: "set", data: row(groupId, title, dm.parentId, nextOrderOf(siblingsOf(idx, dm.parentId))) });
+    else if (group && (group.title || "") !== title) writes.push({ op: "update", id: group.id, if_version: group.version, data: { title, updated_at: stamp } });
+    // under a to-do the new lines take its lane (a draft's stay drafts) and follow its existing children
+    const under = dm.under ? idx.byId.get(dm.parentId) : null;
+    const lineStatus = under ? (statusOf(under) === "draft" ? "draft" : "todo") : "draft";
     const stack = [groupId];   // stack[d] = the parent of a line at depth d
     const counters = new Map();
+    if (under) counters.set(under.id, nextOrderOf(siblingsOf(idx, under.id)) - 10);
     const orderUnder = parentId => { const n = (counters.get(parentId) || 0) + 10; counters.set(parentId, n); return n; };
     const kept = new Set();
     for (const line of lines) {
@@ -2187,7 +2200,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
         if (Object.keys(patch).length) writes.push({ op: "update", id, if_version: it.version, data: { ...patch, updated_at: stamp } });
       } else {
         id = unique(newId(text));
-        writes.push({ op: "set", data: row(id, text, parentId, orderUnder(parentId)) });
+        writes.push({ op: "set", data: { ...row(id, text, parentId, orderUnder(parentId)), status: lineStatus } });
       }
       stack.length = depth + 1;
       stack.push(id);
@@ -2226,13 +2239,13 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const compact = isFolded(it.id, lane.key);
     const card = el("article", { class: `card ${st} group${compact ? " compact" : ""}`, "data-id": it.id, draggable: state.readOnly ? null : "true", tabindex: "0", role: "button", "aria-label": `${it.title || "Untitled"}, ${lane.label}` });
     const edit = () => (isDraft ? openDraftModal({ groupId: it.id }) : openEditor(it.id));
-    // in the Focus layout a click shows the details docked beside the board; a double click still edits
-    const open = () => (isDraft ? openDraftModal({ groupId: it.id }) : (layoutOf() === "focus" ? openDetails(it.id) : openEditor(it.id)));
+    // a click shows the details (docked beside the board in Focus, a dialog elsewhere); a double click on the header, or the details view's Edit, edits (user, 2026-10-04)
+    const open = () => (isDraft ? openDraftModal({ groupId: it.id }) : openDetails(it.id));
     let clickTimer = null;
     card.addEventListener("click", e => {
       if (e.target.closest("button, a, .note-check")) return;
       const line = e.target.closest(".note-line");
-      if (line) { if (isDraft) open(); else if (layoutOf() === "focus") openDetails(line.dataset.id); else openEditor(line.dataset.id); return; }
+      if (line) { if (isDraft) open(); else openDetails(line.dataset.id); return; }
       if (compact || e.target.closest(".card-top")) { clearTimeout(clickTimer); clickTimer = setTimeout(() => toggleFold(it.id, lane.key), 230); return; }
       open();
     });

@@ -210,6 +210,10 @@ function plan(write) {
     if (Array.isArray(row.docs) && row.doc) { row.docs = row.docs.filter(d => d !== row.doc); if (!row.docs.length) row.docs = null; }
     return () => {
       const next = { ...row, ...stampTimes(existing, row), version: existing ? existing.version + 1 : 1 };
+      if (next.status === "done" && !(existing && existing.status === "done") && !("order" in row && existing)) {
+        const doneSibs = store.todos.filter(r => r.id !== next.id && r.project_id === next.project_id && (r.parent_id || null) === (next.parent_id || null) && r.status === "done");
+        if (doneSibs.length) next.order = Math.min(...doneSibs.map(r => Number(r.order) || 0)) - 10;
+      }
       if (existing) store.todos[store.todos.indexOf(existing)] = next;
       else store.todos.push(next);
       return next;
@@ -229,6 +233,11 @@ function plan(write) {
     if (nextStatus !== "draft" && !String(nextTitle || "").trim()) throw new HttpError(400, "invalid_argument", "A to-do needs a title before it leaves Drafts.");
     return () => {
       const next = { ...existing, ...stampTimes(existing, patch), version: existing.version + 1 };
+      // a to-do that has just finished goes above its finished siblings: the latest done sits at the top (the person can move it later)
+      if (next.status === "done" && existing.status !== "done" && !("order" in patch)) {
+        const doneSibs = store.todos.filter(r => r.id !== existing.id && r.project_id === existing.project_id && (r.parent_id || null) === (next.parent_id || null) && r.status === "done");
+        if (doneSibs.length) next.order = Math.min(...doneSibs.map(r => Number(r.order) || 0)) - 10;
+      }
       store.todos[store.todos.indexOf(existing)] = next;
       return next;
     };
