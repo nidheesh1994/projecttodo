@@ -152,9 +152,32 @@ async function applyWrites(writes) {
       seen.add(id);
       return plan(write);
     });
+    const todosBefore = store.todos.slice();
+    const currentsBefore = store.projects.map(p => p.current_id);
     const results = steps.map((step) => step());
+    try {
+      checkDone(writes, results);
+    } catch (error) {
+      store.todos = todosBefore;
+      store.projects.forEach((p, i) => { p.current_id = currentsBefore[i]; });
+      throw error;
+    }
     await commit();
     return results;
+  });
+}
+
+// A to-do is done only when everything under it is done: a write that marks one done while a descendant is open is refused as a whole.
+function checkDone(writes, results) {
+  const kids = new Map();
+  for (const row of store.todos) { const p = row.parent_id || null; if (!kids.has(p)) kids.set(p, []); kids.get(p).push(row); }
+  writes.forEach((write, i) => {
+    const row = results[i];
+    if (!write.data || write.data.status !== "done" || !row || row.deleted) return;
+    const open = [], seen = new Set([row.id]);
+    const walk = id => { for (const k of kids.get(id) || []) { if (seen.has(k.id)) continue; seen.add(k.id); if (k.status !== "done") open.push(k.id); walk(k.id); } };
+    walk(row.id);
+    if (open.length) throw new HttpError(409, "children_open", `"${row.title}" still has ${open.length === 1 ? "one open to-do" : `${open.length} open to-dos`} under it. Tick them done first.`, { open });
   });
 }
 
@@ -242,10 +265,10 @@ const TODO_FIELDS = {
 const MCP_TOOLS = [
   { name: "list_projects", description: "The projects, each with its counts and its current main to-do.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
   { name: "create_project", description: "Make a project.", inputSchema: { type: "object", properties: { name: { type: "string" }, description: { type: "string" } }, required: ["name"], additionalProperties: false } },
-  { name: "list_todos", description: "The to-dos of a project, in tree order (a child follows its parent). Statuses: draft (jotted down, to discuss), todo (next), doing (now), done, deferred (later).", inputSchema: { type: "object", properties: { project_id: { type: "string" }, status: { type: "string", enum: [...STATUSES] } }, required: ["project_id"], additionalProperties: false } },
+  { name: "list_todos", description: "The to-dos of a project, in tree order (a child follows its parent). Statuses: draft (jotted down, to discuss), todo (next), doing (current), done, deferred (later).", inputSchema: { type: "object", properties: { project_id: { type: "string" }, status: { type: "string", enum: [...STATUSES] } }, required: ["project_id"], additionalProperties: false } },
   { name: "get_todo", description: "One to-do with every field.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false } },
   { name: "create_todo", description: "Add a to-do to a project. Without a parent it is a main to-do.", inputSchema: { type: "object", properties: { project_id: { type: "string" }, ...TODO_FIELDS }, required: ["project_id", "title"], additionalProperties: false } },
-  { name: "update_todo", description: "Change fields of a to-do. Only the fields given change.", inputSchema: { type: "object", properties: { id: { type: "string" }, ...TODO_FIELDS }, required: ["id"], additionalProperties: false } },
+  { name: "update_todo", description: "Change fields of a to-do. Only the fields given change. A to-do cannot be set done while anything under it is open (children_open).", inputSchema: { type: "object", properties: { id: { type: "string" }, ...TODO_FIELDS }, required: ["id"], additionalProperties: false } },
   { name: "delete_todo", description: "Delete a to-do; its children move up one level.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false } },
   { name: "set_current", description: "Make a main to-do the project's current one: it goes in progress from today. Pass null to clear.", inputSchema: { type: "object", properties: { project_id: { type: "string" }, todo_id: { type: ["string", "null"] } }, required: ["project_id", "todo_id"], additionalProperties: false } },
   { name: "add_draft", description: "Jot a draft group down: a title and lines (depth 0 for a line, 1 for a child of the line above, and so on), as the board's draft pad does.", inputSchema: { type: "object", properties: { project_id: { type: "string" }, title: { type: "string" }, lines: { type: "array", items: { type: "object", properties: { title: { type: "string" }, depth: { type: "integer", minimum: 0 } }, required: ["title"] } } }, required: ["project_id", "title", "lines"], additionalProperties: false } },
@@ -347,7 +370,7 @@ async function mcpMessage(msg) {
   switch (msg.method) {
     case "initialize": {
       const asked = msg.params && msg.params.protocolVersion;
-      return reply({ protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: "projecttodo", version: "0.1.0" }, instructions: "A to-do board shared with a person. Projects hold to-dos; a to-do without a parent is a main to-do. Drafts are what the person jotted down to discuss; fill in details and move them to todo or doing after the discussion. Dates are YYYY-MM-DD." });
+      return reply({ protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: "projecttodo", version: "0.1.0" }, instructions: "A to-do board shared with a person. Projects hold to-dos; a to-do without a parent is a main to-do. Drafts are what the person jotted down to discuss; fill in details and move them to todo or doing after the discussion. A to-do is done only when everything under it is done. Dates are YYYY-MM-DD." });
     }
     case "ping": return reply({});
     case "tools/list": return reply({ tools: MCP_TOOLS });
@@ -431,7 +454,7 @@ const server = http.createServer(async (req, res) => {
       await applyWrites([{ op: "delete", id: decodeURIComponent(one[1]), if_version: ifVersion === undefined || ifVersion === null ? undefined : Number(ifVersion) }]);
       return send(res, 200, { revision: store.revision, deleted: decodeURIComponent(one[1]) });
     }
-    if (pathname === "/api/batch" && req.method === "POST") { const body = await readBody(req); return send(res, 200, { revision: store.revision, results: await applyWrites(body.writes) }); }
+    if (pathname === "/api/batch" && req.method === "POST") { const body = await readBody(req); const results = await applyWrites(body.writes); return send(res, 200, { revision: store.revision, results }); }
     if (pathname === "/api/doc" && req.method === "GET") return send(res, 200, await readDoc(url.searchParams.get("path")));
     if (pathname === "/api/events" && req.method === "GET") {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" });

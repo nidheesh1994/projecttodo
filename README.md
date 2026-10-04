@@ -110,8 +110,9 @@ created_at, updated_at (ISO 8601), version (kept by the server)
 
 Dropping a card in Current sets `actual_start` when empty; in Done sets `actual_done` (for a
 main to-do, the end of its last finished child) and `actual_start` when empty; leaving
-Done clears `actual_done`. A to-do can be set done only when everything under it is done
-(the page checks this on drops, in the editor and on the ticks; the API does not).
+Done clears `actual_done`. A to-do can be set done only when everything under it is done:
+the page checks this on drops, in the editor and on the ticks, and the server refuses such
+a write with 409 `children_open`.
 A main to-do dropped in Next or Current with no estimated dates
 gets them: the day after the estimated end of the main to-do before it, lasting its
 estimate in days (one day if none). Deleting a parent moves its children up one level.
@@ -126,7 +127,7 @@ estimate in days (one day if none). Deleting a parent moves its children up one 
 | `DELETE /api/projects/{id}` | `{if_version}` | removes it and its to-dos |
 | `GET /api/todos?project={id}` | | `{todos}` |
 | `POST /api/todos` | `{data: {id, project_id, title, …}}` | creates a row (409 if the id exists) |
-| `PATCH /api/todos/{id}` | `{if_version, data: {…}}` | merges fields; 409 `version_mismatch` when the row changed meanwhile |
+| `PATCH /api/todos/{id}` | `{if_version, data: {…}}` | merges fields; 409 `version_mismatch` when the row changed meanwhile, 409 `children_open` when it would be done with open to-dos under it |
 | `DELETE /api/todos/{id}` | `{if_version}` | removes a row |
 | `POST /api/batch` | `{writes: [{op: set\|update\|delete, id, data, if_version}]}` | all or nothing |
 | `GET /api/doc?path=docs/x.md` | | `{path, modified, content}` for a markdown file under the docs folder |

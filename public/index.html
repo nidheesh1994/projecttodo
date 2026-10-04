@@ -271,9 +271,14 @@ section { margin-top: 26px; }
 .chip.owner-user { background: var(--surface-2); }
 .chip.current { color: var(--today); border-color: var(--today); font-weight: 600; }
 .chip.owner-both { background: linear-gradient(90deg, var(--surface-2) 50%, var(--accent-soft) 50%); border-color: transparent; }
-.docline { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); min-width: 0; }
-.docline code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
-.docline .icon-btn { font-size: 11.5px; font-family: var(--font-ui); }
+/* Fact rows: the name on the left, the value on the right, one fact per line. */
+.facts { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+.fact { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12px; min-width: 0; }
+.fact-k { color: var(--muted); flex: none; }
+.fact-v { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg); min-width: 0; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.fact-v .part { white-space: nowrap; }
+a.fact-v { text-decoration: none; }
+a.fact-v:hover, a.fact-v:focus-visible { text-decoration: underline; }
 .empty { color: var(--muted); font-size: 13px; padding: 10px 6px; }
 
 /* Timeline */
@@ -837,15 +842,17 @@ svg.tl { display: block; font-family: var(--font-ui); }
     }
     return { est, actual, open };
   }
+  // A fact row: its name on the left, the value on the right.
+  function factRow(name, parts) {
+    const value = el("span", { class: "fact-v" });
+    parts.forEach((p, i) => { if (i) value.append(" · "); value.append(el("span", { class: "part", text: p })); });
+    return el("div", { class: "fact" }, el("span", { class: "fact-k", text: name }), value);
+  }
+  // The Doc row: the path opens the file in the drawer.
   function docLine(path) {
-    const line = el("div", { class: "docline" });
-    const code = el("code", { text: path, title: path });
-    line.append(code);
-    line.append(el("button", { class: "icon-btn", type: "button", title: "Copy the path to the clipboard", onclick: e => { e.stopPropagation(); copyText(path, code); } }, "Copy"));
-    if (path) {
-      line.append(el("button", { class: "icon-btn", type: "button", title: "Read this file from the repository", onclick: e => { e.stopPropagation(); openDrawer(path); } }, "Read"));
-    }
-    return line;
+    return el("div", { class: "fact" },
+      el("span", { class: "fact-k", text: "Doc" }),
+      el("a", { class: "fact-v doc-v", href: "#", text: path, title: `Open ${path}`, onclick: e => { e.preventDefault(); e.stopPropagation(); openDrawer(path); } }));
   }
   // A card folds to one row. Each card can be set on its own; a lane's arrow sets every card in it.
   const isFolded = (id, laneKey) => (state.foldCard.get(id) || state.foldLane.get(laneKey) || (laneKey === "done" || laneKey === "deferred" ? "closed" : "open")) === "closed";
@@ -1649,20 +1656,26 @@ svg.tl { display: block; font-family: var(--font-ui); }
     }
     card.append(top);
     if (compact) return card;
-    // the facts
+    // the chips, then one labelled row per fact: estimate, actual, doc
     const meta = el("div", { class: "meta" });
     const proj = currentProject();
     if (proj && proj.current_id === it.id) meta.append(el("span", { class: "chip current", text: "Current" }));
     if (it.owner && OWNER_LABEL[it.owner]) meta.append(el("span", { class: `chip owner-${it.owner}`, text: OWNER_LABEL[it.owner] }));
     else if (isDraft) meta.append(el("span", { class: "chip owner-none", text: "Draft" }));
-    const d = durations(it);
-    if (d.est !== null) meta.append(el("span", { text: `est ${d.est} d` }));
-    if (d.actual !== null) meta.append(el("span", { text: d.open ? `${d.actual} d so far` : `${d.actual} d` }));
-    if (it.actual_start || it.actual_done) meta.append(el("span", { text: rangeText(it.actual_start, it.actual_done, st === "doing" ? "today" : "") }));
-    if (it.planned_start || it.planned_end) meta.append(el("span", { text: "est " + rangeText(it.planned_start, it.planned_end) }));
     if (lines.length) meta.append(el("span", { class: "mono", text: `${done} of ${lines.length} ${isDraft ? "ticked" : "done"}` }));
     if (meta.childNodes.length) card.append(meta);
-    if (it.doc) card.append(docLine(String(it.doc)));
+    const d = durations(it);
+    const estParts = [];
+    if (it.planned_start || it.planned_end) estParts.push(rangeText(it.planned_start, it.planned_end));
+    if (d.est !== null) estParts.push(`${d.est} d`);
+    const actualParts = [];
+    if (it.actual_start || it.actual_done) actualParts.push(rangeText(it.actual_start, it.actual_done, st === "doing" ? "today" : ""));
+    if (d.actual !== null) actualParts.push(`${d.actual} d`);
+    const facts = el("div", { class: "facts" });
+    if (estParts.length) facts.append(factRow("Est", estParts));
+    if (actualParts.length) facts.append(factRow("Actual", actualParts));
+    if (it.doc) facts.append(docLine(String(it.doc)));
+    if (facts.childNodes.length) card.append(facts);
     // everything under it, as a list
     if (lines.length) {
       const list = el("div", { class: "notes" });
