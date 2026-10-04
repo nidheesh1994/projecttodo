@@ -5,15 +5,18 @@ page, a JSON file, no dependencies, and an MCP server so the assistant you alrea
 (Claude Code, Claude Desktop, or anything that speaks MCP) can read and update the same
 to-dos you see.
 
-![The board: Drafts, Now and Next, with Done and Later off to the right](docs/screenshots/board.png)
+![The board: Drafts, Current and Next, with Done and Later off to the right](docs/screenshots/board.png)
 
 - **Projects** on the first page, each a card. Open one for its board.
-- **Board**: lanes for Drafts, Now, Next, Done and Later. Press **+** on Drafts (or
+- **Board**: lanes for Drafts, Current, Next, Done and Later. Press **+** on Drafts (or
   "New draft") and type a title and a list like a notepad: Enter for the next line, Tab
   for a child, Shift+Tab back out. "Add" makes one draft card with those lines. You go
   through the drafts with your assistant; it fills in the details and moves them on.
-  Drag cards between lanes. Click a card's header to fold it to one row or open it
-  again (Done and Later cards start folded); click its body to edit it. Each lane's header has an
+  A card is a main to-do; everything under it is listed inside the card, ticked when
+  done. Drag cards between lanes. Click a card's header to fold it to one row or open
+  it again (Done and Later cards start folded); double-click the header to edit the
+  main to-do, click a line to edit that to-do, and click its circle to tick it done.
+  A card cannot go to Done until every line in it is ticked. Each lane's header has an
   arrow that folds or opens every card in it.
   Drafts is twice as wide as the other lanes; Done and Later sit past the right edge and
   scroll into view.
@@ -99,15 +102,17 @@ A to-do:
 
 ```
 id, project_id, title, notes, parent_id (null = main to-do), next_id (the sibling after it),
-order (10, 20, …), status: draft | todo (Next) | doing (Now) | done | deferred (Later),
+order (10, 20, …), status: draft | todo (Next) | doing (Current) | done | deferred (Later),
 owner: user | assistant | both | null, doc, estimate_days,
 planned_start, planned_end (estimated start and end), actual_start, actual_done (actual start and end),
 created_at, updated_at (ISO 8601), version (kept by the server)
 ```
 
-Dropping a card in Now sets `actual_start` when empty; in Done sets `actual_done` (for a
+Dropping a card in Current sets `actual_start` when empty; in Done sets `actual_done` (for a
 main to-do, the end of its last finished child) and `actual_start` when empty; leaving
-Done clears `actual_done`. A main to-do dropped in Next or Now with no estimated dates
+Done clears `actual_done`. A to-do can be set done only when everything under it is done
+(the page checks this on drops, in the editor and on the ticks; the API does not).
+A main to-do dropped in Next or Current with no estimated dates
 gets them: the day after the estimated end of the main to-do before it, lasting its
 estimate in days (one day if none). Deleting a parent moves its children up one level.
 

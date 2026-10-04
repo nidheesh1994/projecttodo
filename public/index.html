@@ -15,7 +15,7 @@ A to-do:
   order:         number            position among its siblings, ascending (10, 20, 30 ...)
   status:        "draft" | "todo" | "doing" | "done" | "deferred"
                                    draft = jotted down to discuss (a draft group and its lines), todo = Next,
-                                   doing = Now, done = Done, deferred = Later
+                                   doing = Current, done = Done, deferred = Later
   owner:         "user" | "assistant" | "both" | null
   doc:           string | null     a markdown file, relative to the docs folder
   estimate_days: number | null
@@ -44,12 +44,10 @@ is the end of the last finished to-do under it.
 .dm-list .note-text { font-size: 15px; line-height: 1.5; min-height: 22px; }
 .dm-list .note-check { margin-top: 4px; }
 .dm-help { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
-.card.group .notes { margin-top: 6px; }
-.card.group .note-line { padding: 3px 2px; }
+.card.group .notes { margin-top: 6px; color: var(--muted); }
 .card.group .note-line { cursor: pointer; border-radius: 6px; padding: 3px 4px; margin: 0 -4px; }
 .card.group .note-line:hover { background: var(--surface-2); }
 .card.group .note-text { font-size: 13px; }
-.card-notes { margin-top: 6px; color: var(--muted); font-size: 12.5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .note-line.done .note-text { text-decoration: line-through; color: var(--muted); }
 .note-check.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .note-check.static { cursor: default; }
@@ -237,7 +235,7 @@ section { margin-top: 26px; }
 .counts { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
 
 /* Board */
-/* Four units across: Drafts takes two, Now and Next one each; Done and Later sit beyond the right edge and scroll in. */
+/* Four units across: Drafts takes two, Current and Next one each; Done and Later sit beyond the right edge and scroll in. */
 .board { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 36px) / 4); gap: 12px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; }
 .lane { scroll-snap-align: start; }
 .lane[data-lane="draft"] { grid-column: span 2; }
@@ -251,20 +249,15 @@ section { margin-top: 26px; }
 .cards { display: flex; flex-direction: column; gap: 8px; min-height: 48px; flex: 1; border-radius: 8px; }
 .lane.over .cards { outline: 2px dashed var(--accent); outline-offset: 3px; }
 .card { background: var(--surface); border-radius: 8px; padding: 9px 10px 8px; box-shadow: var(--shadow); cursor: pointer; min-width: 0; border-left: 3px solid transparent; }
-.card .card-top, .card .eyebrow { cursor: pointer; }
+.card .card-top { cursor: pointer; }
 .card.compact { padding: 6px 8px 6px 10px; }
 .card.compact .card-top { align-items: center; gap: 8px; }
 .card.compact .card-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 0; }
 .card.compact .when { color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; }
 .card:hover { outline: 1px solid var(--line-strong); }
 .card.dragging { opacity: 0.45; }
-.card.child { border-left-color: var(--line-strong); }
 .card.done { border-left-color: var(--accent); }
 .card.doing { border-left-color: var(--accent); border-left-style: dashed; }
-.card[data-depth="1"] { margin-left: 14px; }
-.card[data-depth="2"] { margin-left: 28px; }
-.card[data-depth="3"] { margin-left: 42px; }
-.eyebrow { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-top { display: flex; align-items: flex-start; gap: 4px; }
 .card-title { font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; padding-top: 1px; }
 .card.deferred .card-title { color: var(--muted); font-weight: 500; }
@@ -281,8 +274,6 @@ section { margin-top: 26px; }
 .docline { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); min-width: 0; }
 .docline code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 .docline .icon-btn { font-size: 11.5px; font-family: var(--font-ui); }
-.notes { margin-top: 6px; color: var(--muted); font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.kids { margin-top: 6px; font-size: 11.5px; color: var(--muted); font-family: var(--font-mono); }
 .empty { color: var(--muted); font-size: 13px; padding: 10px 6px; }
 
 /* Timeline */
@@ -517,7 +508,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       <label class="f check" id="ed-current-wrap" hidden><input id="ed-current" type="checkbox"><span>Current main to-do (starts today)</span></label>
       <label class="f">Status<select id="ed-status" name="status">
         <option value="draft">Draft (to discuss)</option>
-        <option value="doing">Now (in progress)</option>
+        <option value="doing">Current (in progress)</option>
         <option value="todo">Next (queued)</option>
         <option value="done">Done</option>
         <option value="deferred">Later (deferred)</option>
@@ -568,7 +559,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
 
   const LANES = [
     { key: "draft", label: "Drafts" },
-    { key: "doing", label: "Now" },
+    { key: "doing", label: "Current" },
     { key: "todo", label: "Next" },
     { key: "done", label: "Done" },
     { key: "deferred", label: "Later" },
@@ -582,7 +573,6 @@ svg.tl { display: block; font-family: var(--font-ui); }
     items: [],
     loaded: false,
     readOnly: false,
-    collapsed: new Set(),
     project: null,       // the open project's id (from the path)
     projects: [],
     view: "projects",
@@ -677,14 +667,13 @@ svg.tl { display: block; font-family: var(--font-ui); }
     b.textContent = text || "";
   }
 
-  // ---------- per-viewer collapse memory ----------
+  // ---------- per-viewer fold memory ----------
   try {
-    try { const f = JSON.parse(localStorage.getItem("projecttodo-fold") || "{}"); state.foldCard = new Map(Object.entries(f.card || {})); state.foldLane = new Map(Object.entries(f.lane || {})); } catch (e) { /* fine */ }
-    const raw = localStorage.getItem("projecttodo-collapsed");
-    if (raw) JSON.parse(raw).forEach(id => state.collapsed.add(id));
+    const f = JSON.parse(localStorage.getItem("projecttodo-fold") || "{}");
+    state.foldCard = new Map(Object.entries(f.card || {}));
+    state.foldLane = new Map(Object.entries(f.lane || {}));
   } catch (e) { /* storage unavailable: fine */ }
-  function persistCollapsed() {
-    try { localStorage.setItem("projecttodo-collapsed", JSON.stringify([...state.collapsed])); } catch (e) { /* fine */ }
+  function persistFolds() {
     try { localStorage.setItem("projecttodo-fold", JSON.stringify({ card: Object.fromEntries(state.foldCard), lane: Object.fromEntries(state.foldLane) })); } catch (e) { /* fine */ }
   }
 
@@ -763,6 +752,14 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function renumber(map, list) {
     list.forEach((s, i) => { const o = (i + 1) * 10; if (s.order !== o) addPatch(map, s.id, { order: o }); });
   }
+  // A to-do is done only when everything under it is done: the rule for a drop into Done, the status field and the ticks.
+  function refuseDone(idx, it) {
+    const open = idx.rows.filter(r => r.anc.includes(it.id) && statusOf(r.it) !== "done");
+    if (!open.length) return false;
+    const t = it.title || "Untitled";
+    toast(open.length === 1 ? `Tick the one open to-do under "${t}" done first.` : `Tick the ${open.length} open to-dos under "${t}" done first.`, true);
+    return true;
+  }
   async function dropItem(id, laneKey, beforeId) {
     const idx = index();
     const it = idx.byId.get(id);
@@ -770,6 +767,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const patches = new Map();
     const was = statusOf(it);
     if (was !== laneKey) {
+      if (laneKey === "done" && refuseDone(idx, it)) return;
       const dates = {};
       if (!idx.parentOf(it) && (laneKey === "todo" || laneKey === "doing") && !it.planned_start && !it.planned_end) Object.assign(dates, defaultDates(idx, it));
       if (!idx.parentOf(it) && laneKey === "done" && !it.actual_done) { const last = latestDescendantDone(idx, it); if (last) dates.actual_done = last; }
@@ -806,11 +804,6 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const patches = new Map();
     renumber(patches, sibs);
     if (patches.size) await applyPatches(patches);
-  }
-  function toggleCollapse(id) {
-    if (state.collapsed.has(id)) state.collapsed.delete(id); else state.collapsed.add(id);
-    persistCollapsed();
-    render();
   }
 
   // ---------- clipboard ----------
@@ -858,13 +851,13 @@ svg.tl { display: block; font-family: var(--font-ui); }
   const isFolded = (id, laneKey) => (state.foldCard.get(id) || state.foldLane.get(laneKey) || (laneKey === "done" || laneKey === "deferred" ? "closed" : "open")) === "closed";
   function toggleFold(id, laneKey) {
     state.foldCard.set(id, isFolded(id, laneKey) ? "open" : "closed");
-    persistCollapsed();
+    persistFolds();
     render();
   }
   function foldLane(laneKey, closed, ids) {
     state.foldLane.set(laneKey, closed ? "closed" : "open");
     for (const id of ids) state.foldCard.delete(id);
-    persistCollapsed();
+    persistFolds();
     render();
   }
   // What a folded card shows beside its title: when it finished, how long it has been going, or its estimate.
@@ -874,78 +867,6 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (st === "doing") return d.actual !== null ? `${d.actual} d so far` : (it.actual_start ? `from ${fmtDay(it.actual_start)}` : "");
     if (it.planned_start || it.planned_end) return rangeText(it.planned_start, it.planned_end);
     return d.est !== null ? `est ${d.est} d` : "";
-  }
-  function renderCard(it, idx, ctx) {
-    const st = statusOf(it);
-    const kids = idx.kids.get(it.id) || [];
-    const collapsed = state.collapsed.has(it.id);
-    // A done card is one row (the title and when it finished) until its arrow opens it out.
-    const compact = isFolded(it.id, ctx.lane.key);
-    const card = el("article", {
-      class: `card ${st}${ctx.indent ? " child" : ""}${compact ? " compact" : ""}`,
-      "data-id": it.id,
-      "data-depth": String(Math.min(ctx.indent, 3)),
-      draggable: state.readOnly ? null : "true",
-      tabindex: "0",
-      role: "button",
-      "aria-label": `${it.title || "Untitled"}, ${ctx.lane.label}`,
-    });
-    // The header folds and opens the card; the rest of it opens the form.
-    card.addEventListener("click", e => { if (e.target.closest("button, a")) return; if (compact || e.target.closest(".card-top, .eyebrow")) toggleFold(it.id, ctx.lane.key); else openEditor(it.id); });
-    card.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === card) openEditor(it.id); });
-    card.addEventListener("dragstart", e => {
-      state.dragId = it.id;
-      try { e.dataTransfer.setData("text/plain", it.id); e.dataTransfer.effectAllowed = "move"; } catch (err) { /* fine */ }
-      requestAnimationFrame(() => card.classList.add("dragging"));
-    });
-    card.addEventListener("dragend", () => {
-      card.classList.remove("dragging");
-      state.dragId = null;
-      document.querySelectorAll(".lane.over").forEach(l => l.classList.remove("over"));
-    });
-
-    if (it.parent_id && !ctx.parentInLane && !compact) {
-      const p = idx.byId.get(it.parent_id);
-      if (p) card.append(el("div", { class: "eyebrow", text: `in ${p.title || "untitled"}` }));
-    }
-    const top = el("div", { class: "card-top" });
-    if (ctx.descInLane > 0) {
-      top.append(el("button", { class: "icon-btn tog", type: "button", title: collapsed ? `Show ${ctx.descInLane} hidden` : "Hide children", "aria-expanded": String(!collapsed), onclick: e => { e.stopPropagation(); toggleCollapse(it.id); } }, collapsed ? `▸ ${ctx.descInLane}` : "▾"));
-    }
-    top.append(el("div", { class: "card-title", text: it.title || "Untitled" }));
-    if (compact) {
-      top.append(el("span", { class: "when", text: compactMeta(it, st) }));
-      card.append(top);
-      return card;
-    }
-    const ctl = el("div", { class: "ctl" });
-    if (!state.readOnly) {
-      ctl.append(
-        el("button", { class: "icon-btn", type: "button", title: "Move up among its siblings", "aria-label": "Move up", onclick: e => { e.stopPropagation(); moveSibling(it.id, -1); } }, "↑"),
-        el("button", { class: "icon-btn", type: "button", title: "Move down among its siblings", "aria-label": "Move down", onclick: e => { e.stopPropagation(); moveSibling(it.id, 1); } }, "↓"),
-        el("button", { class: "icon-btn", type: "button", title: "Add a child to-do", "aria-label": "Add a child", onclick: e => { e.stopPropagation(); openDraftModal({ parentId: it.id }); } }, "+"),
-      );
-    }
-    top.append(ctl);
-    card.append(top);
-
-    const meta = el("div", { class: "meta" });
-    const proj = currentProject();
-    if (proj && proj.current_id === it.id) meta.append(el("span", { class: "chip current", text: "Current" }));
-    if (it.owner && OWNER_LABEL[it.owner]) meta.append(el("span", { class: `chip owner-${it.owner}`, text: OWNER_LABEL[it.owner] }));
-    const d = durations(it);
-    if (d.est !== null) meta.append(el("span", { text: `est ${d.est} d` }));
-    if (d.actual !== null) meta.append(el("span", { text: d.open ? `${d.actual} d so far` : `${d.actual} d` }));
-    if (it.actual_start || it.actual_done) meta.append(el("span", { text: rangeText(it.actual_start, it.actual_done, st === "doing" ? "today" : "") }));
-    if (it.planned_start || it.planned_end) meta.append(el("span", { text: "est " + rangeText(it.planned_start, it.planned_end) }));
-    if (meta.childNodes.length) card.append(meta);
-    if (it.doc) card.append(docLine(String(it.doc)));
-    if (it.notes) card.append(el("div", { class: "notes", text: String(it.notes) }));
-    if (kids.length) {
-      const done = kids.filter(k => statusOf(k) === "done").length;
-      card.append(el("div", { class: "kids", text: `${done} of ${kids.length} children done` }));
-    }
-    return card;
   }
   function renderBoard(idx) {
     const board = $("#board-lanes");
@@ -1145,7 +1066,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const kidsOf = id => orderedKids(idx, id).filter(k => okId.has(k.id));
     const mains = kidsOf(null);
     if (!mains.length) {
-      wrap.replaceChildren(el("div", { class: "empty", text: state.loaded ? "No main to-dos yet. Move a draft to Next or Now and it appears here." : "Loading…" }));
+      wrap.replaceChildren(el("div", { class: "empty", text: state.loaded ? "No main to-dos yet. Move a draft to Next or Current and it appears here." : "Loading…" }));
       $("#tl-counts").textContent = "";
       return;
     }
@@ -1452,6 +1373,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       if (ok) { closeEditor(); toast(`Added ${v.title}`); }
     } else {
       const before = state.editing.snapshot;
+      if (v.status === "done" && statusOf(before) !== "done" && refuseDone(idx, before)) return;
       const patch = {};
       for (const k of Object.keys(v)) {
         const a = before[k] === undefined ? null : before[k];
@@ -1741,7 +1663,6 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (lines.length) meta.append(el("span", { class: "mono", text: `${done} of ${lines.length} ${isDraft ? "ticked" : "done"}` }));
     if (meta.childNodes.length) card.append(meta);
     if (it.doc) card.append(docLine(String(it.doc)));
-    if (it.notes) card.append(el("div", { class: "card-notes", text: String(it.notes) }));
     // everything under it, as a list
     if (lines.length) {
       const list = el("div", { class: "notes" });
@@ -1751,8 +1672,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
         const tick = el("button", { class: `note-check${isDone ? " on" : ""}`, type: "button", title: isDone ? (isDraft ? "Back to draft" : "Back to Next") : "Tick it done", "aria-label": isDone ? "Done" : "Not done", onclick: async e => {
           e.stopPropagation();
           if (state.readOnly) return;
-          const p = new Map();
           const to = isDone ? (isDraft ? "draft" : "todo") : "done";
+          if (to === "done" && refuseDone(index(), r.it)) return;
+          const p = new Map();
           addPatch(p, r.it.id, { status: to, ...statusDates(r.it, to), updated_at: nowIso() });
           await applyPatches(p);
         } }, "✓");
@@ -1817,7 +1739,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
         el("div", { class: "card-title", text: p.name }),
         p.description ? el("div", { class: "notes", text: p.description }) : null,
         el("div", { class: "meta" }, el("span", { text: `${c.main || 0} main` }), el("span", { text: `${c.doing || 0} now` }), el("span", { text: `${c.todo || 0} next` }), el("span", { text: `${c.done || 0} done` }), c.draft ? el("span", { text: `${c.draft} drafts` }) : null),
-        p.current ? el("div", { class: "current-line" }, el("b", { text: "Now: " }), p.current.title) : null));
+        p.current ? el("div", { class: "current-line" }, el("b", { text: "Current: " }), p.current.title) : null));
     }
     if (!state.projects.length) box.append(el("div", { class: "empty", text: state.loaded ? "No projects yet. Press New project." : "Loading…" }));
     $("#projects-counts").textContent = state.projects.length ? `${state.projects.length} ${state.projects.length === 1 ? "project" : "projects"}` : "";
