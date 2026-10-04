@@ -28,10 +28,13 @@ to-dos you see.
 ## Run it
 
 ```bash
-node server.mjs            # http://localhost:3004
+./start.sh                                        # http://localhost:3004
+./start.sh --port 3010 --data ~/notes/todos --docs ~/notes
 ```
 
-Needs Node 18 or newer. Settings are environment variables:
+Needs Node 18 or newer. `./start.sh --help` lists the flags; each one sets the
+environment variable of the same meaning, so `node server.mjs` with the variables set
+does the same:
 
 | Variable | Default | What |
 |---|---|---|

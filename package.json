@@ -4,9 +4,11 @@
   "description": "A small local to-do board for a person and their AI assistant: projects, a board with drafts, a timeline, and an MCP server.",
   "type": "module",
   "license": "MIT",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "start": "node server.mjs",
+    "start": "./start.sh",
     "mcp": "node mcp.mjs"
   },
   "bin": {
