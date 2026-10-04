@@ -754,7 +754,6 @@ svg.tl { display: block; font-family: var(--font-ui); }
     editingProject: null,   // the project open in the project form, or null when it makes a new one
     agendaScrolled: false,  // the Focus agenda opens on today once, then keeps the viewer's place
     calMonth: null,         // the month the Wall calendar shows (a day number inside it), kept across renders
-    defaults: {},           // the server's data and docs folders, shown as placeholders
     editing: null,
     pending: 0,
   };
@@ -2195,8 +2194,6 @@ svg.tl { display: block; font-family: var(--font-ui); }
     $("#pm-desc").value = project ? (project.description || "") : "";
     $("#pm-data").value = project ? (project.data_dir || "") : "";
     $("#pm-docs").value = project ? (project.docs_dir || "") : "";
-    $("#pm-data").placeholder = state.defaults.data_dir || "";
-    $("#pm-docs").placeholder = state.defaults.docs_dir || "";
     $("#pm").hidden = false;
     setTimeout(() => $("#pm-name").focus(), 0);
   }
@@ -2300,7 +2297,6 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (loading) return loading;
     loading = Promise.all([call("GET", "/api/projects"), state.project ? call("GET", `/api/todos?project=${encodeURIComponent(state.project)}`) : Promise.resolve({ todos: [] })]).then(([p, t]) => {
       state.projects = p.projects;
-      state.defaults = p.defaults || {};
       state.items = t.todos.map(x => ({ ...x }));
       state.loaded = true;
       const project = currentProject();
