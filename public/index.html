@@ -583,7 +583,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     projects: [],
     view: "projects",
     foldCard: new Map(),   // card id → "open" | "closed" (per viewer); overrides the lane's setting
-    foldLane: new Map(),   // lane key → "open" | "closed"; Done starts closed, the rest open
+    foldLane: new Map(),   // lane key → "open" | "closed"; Done and Later start closed, the rest open
     tlZoom: 1,
     tlScrolled: false,
     tlNow: null,
@@ -850,7 +850,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     return line;
   }
   // A card folds to one row. Each card can be set on its own; a lane's arrow sets every card in it.
-  const isFolded = (id, laneKey) => (state.foldCard.get(id) || state.foldLane.get(laneKey) || (laneKey === "done" ? "closed" : "open")) === "closed";
+  const isFolded = (id, laneKey) => (state.foldCard.get(id) || state.foldLane.get(laneKey) || (laneKey === "done" || laneKey === "deferred" ? "closed" : "open")) === "closed";
   function toggleFold(id, laneKey) {
     state.foldCard.set(id, isFolded(id, laneKey) ? "open" : "closed");
     persistCollapsed();

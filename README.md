@@ -13,7 +13,7 @@ to-dos you see.
   for a child, Shift+Tab back out. "Add" makes one draft card with those lines. You go
   through the drafts with your assistant; it fills in the details and moves them on.
   Drag cards between lanes. Click a card's header to fold it to one row or open it
-  again (Done cards start folded); click its body to edit it. Each lane's header has an
+  again (Done and Later cards start folded); click its body to edit it. Each lane's header has an
   arrow that folds or opens every card in it.
   Drafts is twice as wide as the other lanes; Done and Later sit past the right edge and
   scroll into view.
