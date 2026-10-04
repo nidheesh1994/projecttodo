@@ -49,3 +49,4 @@ whichever the person prefers.
 
 - 2026-10-04: plan written; the switch and the Compact layout started.
 - 2026-10-04: the layout switch and the Compact layout built (board, chrome, timeline sizes, default theme Slate); README and a screenshot added. The second layout waits for the choice between Focus and Wall.
+- 2026-10-04: Focus and Wall built (the person said "do the different layouts" without choosing, so both): Focus = one column with Current first, details docked on the right, an agenda timeline; Wall = a grid of equal cards with the lane as a tag, a month calendar timeline. Each brings its default theme (Paper, Midnight). Four layouts in the switch. Open: should a layout be a project setting rather than a viewer one?

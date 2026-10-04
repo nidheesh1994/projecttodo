@@ -171,7 +171,11 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible, input:focus-vis
 code { font-family: var(--font-mono); }
 
 /* Header */
-.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+/* The header: the brand, the live dot and the pages on the left, the project's name in the middle, the menus on the right. */
+.top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px 18px; }
+.top-left { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; min-width: 0; }
+.project-title { text-align: center; font-size: 18px; font-weight: 600; letter-spacing: -0.005em; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 900px) { .top { grid-template-columns: 1fr auto; } .project-title { grid-column: 1 / -1; grid-row: 2; text-align: left; font-size: 16px; } }
 .brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .brand h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
 .brand .sub { color: var(--muted); font-weight: 500; }
@@ -209,7 +213,78 @@ html[data-layout="compact"] .note-in { font-size: 10px; }
 html[data-layout="compact"] .card.compact { padding: 4px 6px 4px 8px; }
 html[data-layout="compact"] .project-card { padding: 10px 12px; }
 html[data-layout="compact"] .tl text { font-size: 11px; }
-html[data-layout="compact"] .gbox { padding: 3px 7px; font-size: 11.5px; }
+html[data-layout="compact"] .gbox { padding: 3px 7px; font-size: 11.5px; line-height: 1.2; }
+html[data-layout="compact"] .gbox .gtitle { font-size: 11.5px; line-height: 1.2; }
+
+/* Focus layout: one column of lanes with Current first; the details docked on the right instead of a modal; the timeline as an agenda. */
+html[data-layout="focus"] .board { display: flex; flex-direction: column; gap: 14px; overflow: visible; }
+html[data-layout="focus"] .lane { max-width: 780px; }
+html[data-layout="focus"] .lane[data-lane="doing"] { order: -1; }
+html[data-layout="focus"] .lane[data-lane="draft"] .cards { display: flex; columns: auto; }
+html[data-layout="focus"] .lane[data-lane="draft"] .card { margin-bottom: 0; }
+html[data-layout="focus"] .zoom { display: none; }
+html[data-layout="focus"] .board { overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+html[data-layout="focus"] .tl-panel, html[data-layout="wall"] .tl-panel { overflow-y: auto; overflow-x: hidden; }
+html[data-layout="focus"] #dv { justify-content: flex-end; align-items: stretch; padding: 0; background: transparent; pointer-events: none; }
+html[data-layout="focus"] #dv .dialog { pointer-events: auto; width: min(520px, 100%); max-height: none; border-radius: 0; border-left: 1px solid var(--line); }
+html[data-layout="focus"] body:has(#dv:not([hidden])) .wrap { padding-right: 536px; }
+@media (max-width: 1100px) { html[data-layout="focus"] body:has(#dv:not([hidden])) .wrap { padding-right: 16px; } }
+.agenda { padding: 4px 0; }
+.agenda-day { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: 6px 16px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.agenda-day:first-child { border-top: 0; }
+.agenda-day.today { background: var(--accent-soft); }
+.agenda-date { font-family: var(--font-mono); font-size: 12px; color: var(--muted); padding-top: 3px; }
+.agenda-day.today .agenda-date { color: var(--today); font-weight: 600; }
+.agenda-items { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.agenda-item { display: flex; align-items: baseline; gap: 8px; cursor: pointer; border-radius: 6px; padding: 2px 6px; margin: 0 -6px; font-size: 13px; min-width: 0; }
+.agenda-item:hover, .agenda-item:focus-visible { background: var(--surface); outline: none; }
+.agenda-item.none { color: var(--muted); cursor: default; }
+.agenda-item .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dull); flex: none; align-self: center; }
+.agenda-item.done .dot { background: var(--done); }
+.agenda-item.doing .dot { background: var(--accent); }
+.agenda-item.deferred .dot { background: transparent; border: 1.5px solid var(--dull); }
+.agenda-item.done .agenda-title { color: var(--muted); text-decoration: line-through; }
+.agenda-title { min-width: 0; overflow-wrap: anywhere; }
+.agenda-item .when { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-left: auto; white-space: nowrap; }
+.agenda-item.child { padding-left: 24px; }
+.agenda-quiet { padding: 6px 14px 6px 166px; color: var(--muted); font-size: 12px; font-family: var(--font-mono); border-top: 1px solid var(--line); }
+
+/* Wall layout: a grid of equal cards, the lane as a tag on each card; the timeline as a month calendar. */
+html[data-layout="wall"] .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); grid-auto-flow: row; grid-auto-columns: auto; gap: 12px; overflow: visible; }
+html[data-layout="wall"] .lane, html[data-layout="wall"] .cards { display: contents; }
+html[data-layout="wall"] .lane[data-lane="draft"] .cards { display: contents; columns: auto; }
+html[data-layout="wall"] .lane[data-lane="draft"] .card { margin-bottom: 0; }
+html[data-layout="wall"] .lane-head, html[data-layout="wall"] .cards > .empty { display: none; }
+html[data-layout="wall"] .card { border-left-width: 0; border-top: 3px solid var(--lane-color, var(--line-strong)); border-radius: 8px; }
+html[data-layout="wall"] .card.doing { border-top-color: var(--lane-color, var(--accent)); }
+html[data-layout="wall"] .card.done { border-top-color: var(--lane-color, var(--done)); }
+html[data-layout="wall"] .lane-tag { display: inline-block; }
+html[data-layout="wall"] .zoom { display: none; }
+.lane-tag { display: none; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 7px; border-radius: 999px; font-weight: 600; margin-left: 8px; flex: none; align-self: center; color: var(--lane-color, var(--muted)); background: color-mix(in srgb, var(--lane-color, var(--muted)) 16%, transparent); }
+.lane-tag.doing { --lane-color: var(--accent); }
+.lane-tag.done { --lane-color: var(--done); }
+.lane.colored .lane-tag { --lane-color: inherit; }
+.cal { padding: 8px 12px 12px; }
+.cal-nav { display: flex; align-items: center; gap: 4px; margin: 0 0 8px; }
+.cal-nav h3 { margin: 0 auto 0 8px; font-size: 14px; }
+.cal-nav .icon-btn { font-size: 18px; line-height: 1; padding: 2px 8px; }
+.cal-strip { display: flex; gap: 16px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.cal-strip::-webkit-scrollbar { display: none; }
+.cal-month { flex: 0 0 100%; min-width: 0; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-dow { font-family: var(--font-mono); font-size: 11px; color: var(--muted); text-align: center; padding-bottom: 2px; }
+.cal-day { min-height: 76px; border: 1px solid var(--line); border-radius: 7px; padding: 4px 5px; background: var(--surface); min-width: 0; }
+.cal-day.weekend { background: var(--surface-2); }
+.cal-day.blank { border-color: transparent; background: transparent; }
+.cal-day.today { outline: 2px solid var(--today); outline-offset: -2px; }
+.cal-num { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.cal-day.today .cal-num { color: var(--today); font-weight: 600; }
+.cal-chip { display: block; width: 100%; font: inherit; font-size: 11px; line-height: 1.3; text-align: left; padding: 1px 5px; border: 0; border-left: 2px solid var(--dull); border-radius: 4px; margin-top: 3px; background: var(--dull-soft); color: var(--fg); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-chip.doing { background: var(--accent-soft); border-left-color: var(--accent); }
+.cal-chip.done { background: var(--done-soft); border-left-color: var(--done); color: var(--muted); }
+.cal-chip.deferred { border-left-style: dashed; }
+.cal-chip.child { font-size: 10.5px; }
+.cal-chip:hover, .cal-chip:focus-visible { outline: 1px solid var(--line-strong); }
 .btn { border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg); border-radius: 6px; padding: 6px 11px; cursor: pointer; line-height: 1.3; }
 .btn:hover { background: var(--surface-2); }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
@@ -461,16 +536,18 @@ svg.tl { display: block; font-family: var(--font-ui); }
 
 <div class="wrap">
   <header class="top">
-    <div class="brand">
-      <h1>ProjectTodo</h1>
-      <span class="sub" id="brand-sub">Projects</span>
+    <div class="top-left">
+      <div class="brand"><h1>ProjectTodo</h1></div>
+      <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
+      <nav class="jump" aria-label="Pages"><a href="/" data-view="projects">Projects</a><a href="/" data-view="board" id="nav-board">Board</a><a href="/" data-view="tree" id="nav-tree">Timeline</a></nav>
     </div>
-    <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
-    <nav class="jump" aria-label="Pages"><a href="/" data-view="projects">Projects</a><a href="/" data-view="board" id="nav-board">Board</a><a href="/" data-view="tree" id="nav-tree">Timeline</a></nav>
+    <div class="project-title" id="brand-sub">Projects</div>
     <div class="top-actions">
       <select class="theme-pick" id="layout" aria-label="Layout" title="Layout">
         <option value="">Classic</option>
         <option value="compact">Compact</option>
+        <option value="focus">Focus</option>
+        <option value="wall">Wall</option>
       </select>
       <select class="theme-pick" id="theme" aria-label="Theme" title="Theme">
         <option value="">Auto</option>
@@ -643,6 +720,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     { key: "deferred", label: "Later" },
   ];
   const STATUS_SET = new Set(LANES.map(l => l.key));
+  const layoutOf = () => document.documentElement.dataset.layout || "";   // "", compact, focus or wall
   // The board's columns as the project keeps them: an order and a colour each (set on the board page, shared by everyone).
   function laneList() {
     const p = currentProject();
@@ -674,6 +752,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     dragId: null,
     dragLane: null,     // the column being dragged by its header
     editingProject: null,   // the project open in the project form, or null when it makes a new one
+    agendaScrolled: false,  // the Focus agenda opens on today once, then keeps the viewer's place
+    calMonth: null,         // the month the Wall calendar shows (a day number inside it), kept across renders
     defaults: {},           // the server's data and docs folders, shown as placeholders
     editing: null,
     pending: 0,
@@ -1040,6 +1120,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
 
   function renderBoard(idx) {
     const board = $("#board-lanes");
+    const keepTop = board.scrollTop;
     board.replaceChildren();
     const counts = {};
     const lanes = laneList();
@@ -1100,6 +1181,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       board.append(laneEl);
     }
     $("#board-counts").textContent = state.loaded ? lanes.map(l => `${counts[l.key]} ${l.label.toLowerCase()}`).join(" · ") : "";
+    if (keepTop) board.scrollTop = keepTop;
   }
 
   // ---------- timeline ----------
@@ -1151,6 +1233,129 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (it.doc) lines.push(String(it.doc));
     return lines.join("\n");
   }
+  // In the Focus layout the board and the agenda, and in Wall the calendar, end at the bottom of the viewport and scroll inside themselves.
+  function fitToViewport(node) {
+    const fit = layoutOf() === "focus" || (layoutOf() === "wall" && node.id === "tl-wrap");
+    if (!fit) { node.style.maxHeight = ""; return; }
+    const top = node.getBoundingClientRect().top + window.scrollY;
+    node.style.maxHeight = Math.max(240, window.innerHeight - top - 16) + "px";
+  }
+  // ---------- the Focus layout's timeline: an agenda, one row per day; the Wall layout's: a month calendar ----------
+  // What touches a day: each main to-do whose span covers it, and every to-do under one that started or finished on it.
+  function agendaEntries(idx, mainList, okId, d) {
+    const out = [];
+    for (const sp of mainList) {
+      if (d < sp.start || d > sp.end) continue;
+      const n = sp.end - sp.start + 1, k = d - sp.start + 1;
+      let when = n === 1 ? "" : (d === sp.start ? "starts" : d === sp.end ? (sp.open ? "so far" : "ends") : `day ${k} of ${n}`);
+      if (d === sp.start && sp.it.actual_start_time) when = sp.it.actual_start_time + (when ? " · " + when : "");
+      out.push({ it: sp.it, child: false, when });
+    }
+    const day = dayStr(d);
+    for (const r of idx.rows) {
+      if (r.depth === 0 || !okId.has(r.it.id)) continue;
+      const parts = [];
+      if (r.it.actual_start === day) parts.push("started" + (r.it.actual_start_time ? " " + r.it.actual_start_time : ""));
+      if (r.it.actual_done === day) parts.push("done" + (r.it.actual_done_time ? " " + r.it.actual_done_time : ""));
+      if (parts.length) out.push({ it: r.it, child: true, when: parts.join(" · ") });
+    }
+    return out;
+  }
+  const fmtLong = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const fmtMonthLong = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+  function renderAgenda(idx, mains, mainList, today, okId) {
+    const wrap = $("#tl-wrap");
+    let min = Math.min(today, ...mainList.map(s => s.start)), max = Math.max(today, ...mainList.map(s => s.end));
+    min = Math.max(min, today - 60); max = Math.min(max, today + 120);
+    const box = el("div", { class: "agenda" });
+    let quiet = 0, days = 0;
+    const flush = () => { if (quiet) { box.append(el("div", { class: "agenda-quiet", text: quiet === 1 ? "1 quiet day" : `${quiet} quiet days` })); quiet = 0; } };
+    for (let d = min; d <= max; d++) {
+      const entries = agendaEntries(idx, mainList, okId, d);
+      if (!entries.length && d !== today) { quiet++; continue; }
+      flush(); days++;
+      const items = el("div", { class: "agenda-items" });
+      if (!entries.length) items.append(el("div", { class: "agenda-item none", text: "Nothing on the board today" }));
+      for (const e of entries) {
+        items.append(el("div", { class: `agenda-item ${statusOf(e.it)}${e.child ? " child" : ""}`, role: "button", tabindex: "0", onclick: () => openDetails(e.it.id), onkeydown: ev => { if (ev.key === "Enter") openDetails(e.it.id); } },
+          el("span", { class: "dot" }), el("span", { class: "agenda-title", text: e.it.title || "Untitled" }), e.when ? el("span", { class: "when", text: e.when }) : null));
+      }
+      box.append(el("div", { class: "agenda-day" + (d === today ? " today" : "") }, el("div", { class: "agenda-date", text: fmtLong.format(dayDate(d)) + (d === today ? " · today" : "") }), items));
+    }
+    flush();
+    const keep = state.agendaScrolled ? wrap.scrollTop : null;
+    wrap.replaceChildren(box);
+    $("#tl-counts").textContent = `${days} days with work · ${mains.length} main`;
+    fitToViewport(wrap);
+    const t = box.querySelector(".agenda-day.today");
+    if (keep !== null) wrap.scrollTop = keep;
+    else if (t) { wrap.scrollTop = Math.max(0, t.offsetTop - wrap.clientHeight / 2 + t.offsetHeight / 2); state.agendaScrolled = true; }
+  }
+  function renderCalendar(idx, mains, mainList, today, okId) {
+    const wrap = $("#tl-wrap");
+    let min = Math.min(today - 7, ...mainList.map(s => s.start)), max = Math.max(today + 45, ...mainList.map(s => s.end));
+    min = Math.max(min, today - 90); max = Math.min(max, today + 180);
+    const first = dayDate(min), last = dayDate(max);
+    const strip = el("div", { class: "cal-strip" });
+    const label = el("h3", { text: "" });
+    const months = [];
+    // the months sit side by side with a gap: an arrow goes to the next month's own left edge, not a viewport's width
+    // where a month starts inside the strip (offsetLeft is relative to the page, so it is measured from the strip's own edge)
+    const startOf = el => el.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft;
+    const nearest = () => { let best = 0, d = Infinity; strip.querySelectorAll(".cal-month").forEach((el, i) => { const dd = Math.abs(startOf(el) - strip.scrollLeft); if (dd < d) { d = dd; best = i; } }); return best; };
+    // the strip is moved by hand (a short eased animation), since the browser's own smooth scroll and its scrollend fight each other
+    let anim = null;
+    const animateTo = target => {
+      if (anim) { cancelAnimationFrame(anim.frame); clearTimeout(anim.timer); }
+      const from = strip.scrollLeft, dist = target - from, t0 = performance.now(), dur = 320;
+      const finish = () => { if (!anim) return; cancelAnimationFrame(anim.frame); clearTimeout(anim.timer); anim = null; strip.scrollLeft = target; };
+      const step = now => { const k = Math.min(1, (now - t0) / dur); strip.scrollLeft = from + dist * (1 - Math.pow(1 - k, 3)); if (k < 1) anim.frame = requestAnimationFrame(step); else finish(); };
+      // whatever the frame timing does, the strip ends exactly on the month
+      anim = { frame: requestAnimationFrame(step), timer: setTimeout(finish, dur + 60) };
+    };
+    const goTo = i => { const els = strip.querySelectorAll(".cal-month"); animateTo(startOf(els[i])); show(i); state.calMonth = months[i].start; };
+    const go = dir => goTo(Math.max(0, Math.min(months.length - 1, nearest() + dir)));
+    const box = el("div", { class: "cal" },
+      el("div", { class: "cal-nav" },
+        el("button", { class: "icon-btn", type: "button", title: "Previous month", "aria-label": "Previous month", onclick: () => go(-1) }, "‹"),
+        el("button", { class: "icon-btn", type: "button", title: "Next month", "aria-label": "Next month", onclick: () => go(1) }, "›"),
+        label),
+      strip);
+    let y = first.getUTCFullYear(), m = first.getUTCMonth(), chips = 0;
+    const endY = last.getUTCFullYear(), endM = last.getUTCMonth();
+    while (y < endY || (y === endY && m <= endM)) {
+      const monthStart = Math.round(Date.UTC(y, m, 1) / 86400000), monthEnd = Math.round(Date.UTC(y, m + 1, 0) / 86400000);
+      const grid = el("div", { class: "cal-grid" });
+      for (const n of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) grid.append(el("div", { class: "cal-dow", text: n }));
+      const lead = (dayDate(monthStart).getUTCDay() + 6) % 7;
+      for (let i = 0; i < lead; i++) grid.append(el("div", { class: "cal-day blank" }));
+      for (let d = monthStart; d <= monthEnd; d++) {
+        const dow = dayDate(d).getUTCDay();
+        const cell = el("div", { class: "cal-day" + (dow === 0 || dow === 6 ? " weekend" : "") + (d === today ? " today" : "") }, el("div", { class: "cal-num", text: String(dayDate(d).getUTCDate()) }));
+        for (const e of agendaEntries(idx, mainList, okId, d)) {
+          cell.append(el("button", { class: `cal-chip ${statusOf(e.it)}${e.child ? " child" : ""}`, type: "button", title: `${e.it.title || "Untitled"}${e.when ? " · " + e.when : ""}`, onclick: () => openDetails(e.it.id) }, (e.child ? "↳ " : "") + (e.it.title || "Untitled")));
+          chips++;
+        }
+        grid.append(cell);
+      }
+      months.push({ start: monthStart, end: monthEnd, name: fmtMonthLong.format(dayDate(monthStart)) });
+      strip.append(el("div", { class: "cal-month" }, grid));
+      m++; if (m > 11) { m = 0; y++; }
+    }
+    wrap.replaceChildren(box);
+    $("#tl-counts").textContent = `${mains.length} main · ${chips} entries on the calendar`;
+    fitToViewport(wrap);
+    // the strip shows one month at a time: the one kept from before, else the current one; the arrows and a sideways scroll move it
+    const want = state.calMonth !== null ? state.calMonth : today;
+    let at = months.findIndex(mo => want >= mo.start && want <= mo.end); if (at < 0) at = months.findIndex(mo => today >= mo.start && today <= mo.end); if (at < 0) at = 0;
+    const show = i => { label.textContent = months[i] ? months[i].name : ""; };
+    show(at);
+    requestAnimationFrame(() => { const els = strip.querySelectorAll(".cal-month"); if (els[at]) strip.scrollLeft = startOf(els[at]); });
+    strip.addEventListener("scroll", () => { const i = nearest(); show(i); state.calMonth = months[i].start; }, { passive: true });
+    // a sideways scroll settles on the nearest month
+    strip.addEventListener("scrollend", () => { if (anim) return; const els = strip.querySelectorAll(".cal-month"); const i = nearest(); if (Math.abs(startOf(els[i]) - strip.scrollLeft) > 2) animateTo(startOf(els[i])); });
+  }
+
   // ---------- dates and order ----------
   const dayStr = n => dayDate(n).toISOString().slice(0, 10);
   // Siblings in the order their next links say: a chain runs a → b → c, then the siblings nobody points to. A loop is cut where it closes.
@@ -1272,7 +1477,10 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const project = currentProject();
     const currentId = project ? project.current_id : null;
     const mainList = mainSpans(idx, mains, today);
+    if (layoutOf() === "focus") return renderAgenda(idx, mains, mainList, today, okId);
+    if (layoutOf() === "wall") return renderCalendar(idx, mains, mainList, today, okId);
     let min = today, max = today;
+    // the chart's columns
     for (const sp of mainList) { min = Math.min(min, sp.start, sp.est ? sp.est[0] : sp.start); max = Math.max(max, sp.end, sp.est ? sp.est[1] : sp.end); }
     min -= 1; max += 2;
     // how many columns wide and rows tall each tree is: siblings side by side, children below
@@ -1282,7 +1490,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     // a day under a main to-do is as wide as its share of the tree needs
     const z = state.tlZoom || 1;   // zoom scales the days and the columns; the rows keep their height
     const compact = document.documentElement.dataset.layout === "compact";   // the Compact layout draws smaller boxes and days
-    const SLOT = Math.round((compact ? 124 : 156) * z), MINDAY = Math.round((compact ? 24 : 30) * z), BOX_H = compact ? 34 : 42, ROW_H = compact ? 50 : 62, GAP = 8, AXIS_H = compact ? 42 : 48, PAD = 16, FOOT = 22;
+    const SLOT = Math.round((compact ? 124 : 156) * z), MINDAY = Math.round((compact ? 24 : 30) * z), BOX_H = compact ? 38 : 42, ROW_H = compact ? 56 : 62, GAP = 8, AXIS_H = compact ? 42 : 48, PAD = 16, FOOT = 22;
     const dayW = new Map();
     for (let d = min; d <= max; d++) dayW.set(d, MINDAY);
     for (const sp of mainList) { const n = sp.end - sp.start + 1; const need = Math.ceil(size.get(sp.it.id).w / n) * SLOT; for (let d = sp.start; d <= sp.end; d++) dayW.set(d, Math.max(dayW.get(d), need)); }
@@ -1435,8 +1643,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
     $("#dv-eyebrow").textContent = parent ? `in ${parent.title || "Untitled"}` : "Main to-do";
     $("#dv-title").textContent = it.title || "Untitled";
     const pills = $("#dv-pills");
-    pills.replaceChildren(el("span", { class: `chip status-${st}`, text: lane ? lane.label : st }));
-    if (project && project.current_id === it.id) pills.append(el("span", { class: "chip current", text: "Current" }));
+    // the project's current to-do shows one chip, not "Current" twice (the lane is also called Current)
+    const isCurrent = !!(project && project.current_id === it.id);
+    pills.replaceChildren(isCurrent ? el("span", { class: "chip current", text: "Current main to-do" }) : el("span", { class: `chip status-${st}`, text: lane ? lane.label : st }));
     if (it.owner && OWNER_LABEL[it.owner]) pills.append(el("span", { class: `chip owner-${it.owner}`, text: OWNER_LABEL[it.owner] }));
     const grid = $("#dv-grid");
     grid.replaceChildren();
@@ -1840,23 +2049,25 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const done = lines.filter(r => statusOf(r.it) === "done").length;
     const compact = isFolded(it.id, lane.key);
     const card = el("article", { class: `card ${st} group${compact ? " compact" : ""}`, "data-id": it.id, draggable: state.readOnly ? null : "true", tabindex: "0", role: "button", "aria-label": `${it.title || "Untitled"}, ${lane.label}` });
-    const open = () => (isDraft ? openDraftModal({ groupId: it.id }) : openEditor(it.id));
+    const edit = () => (isDraft ? openDraftModal({ groupId: it.id }) : openEditor(it.id));
+    // in the Focus layout a click shows the details docked beside the board; a double click still edits
+    const open = () => (isDraft ? openDraftModal({ groupId: it.id }) : (layoutOf() === "focus" ? openDetails(it.id) : openEditor(it.id)));
     let clickTimer = null;
     card.addEventListener("click", e => {
       if (e.target.closest("button, a, .note-check")) return;
       const line = e.target.closest(".note-line");
-      if (line) { if (isDraft) open(); else openEditor(line.dataset.id); return; }
+      if (line) { if (isDraft) open(); else if (layoutOf() === "focus") openDetails(line.dataset.id); else openEditor(line.dataset.id); return; }
       if (compact || e.target.closest(".card-top")) { clearTimeout(clickTimer); clickTimer = setTimeout(() => toggleFold(it.id, lane.key), 230); return; }
       open();
     });
-    card.addEventListener("dblclick", e => { if (e.target.closest("button, a, .note-check, .note-line")) return; clearTimeout(clickTimer); e.preventDefault(); open(); });
+    card.addEventListener("dblclick", e => { if (e.target.closest("button, a, .note-check, .note-line")) return; clearTimeout(clickTimer); e.preventDefault(); edit(); });
     card.addEventListener("keydown", e => { if (e.key === "Enter" && e.target === card) open(); });
     if (!state.readOnly) {
       card.addEventListener("dragstart", e => { state.dragId = it.id; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", it.id); } catch (err) { /* older engines */ } card.classList.add("dragging"); });
       card.addEventListener("dragend", () => { state.dragId = null; card.classList.remove("dragging"); document.querySelectorAll(".lane.over").forEach(l => l.classList.remove("over")); });
     }
     // the header: title, then the controls (a draft's pencil, a to-do's up, down and add)
-    const top = el("div", { class: "card-top" }, el("div", { class: "card-title", text: it.title || "Untitled" }));
+    const top = el("div", { class: "card-top" }, el("div", { class: "card-title", text: it.title || "Untitled" }), el("span", { class: `lane-tag ${lane.key}`, text: lane.label }));
     if (compact) top.append(el("span", { class: "when", text: lines.length ? `${done} of ${lines.length}` : compactMeta(it, st) }));
     else if (!state.readOnly) {
       top.append(isDraft
@@ -2012,12 +2223,14 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const idx = index();
     renderBoard(idx);
     renderTimeline(idx);
+    fitToViewport($("#board-lanes"));
+    fitToViewport($("#tl-wrap"));
   }
   let resizeTimer = null;
-  window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => renderTimeline(index()), 150); });
+  window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (state.view !== "projects") render(); }, 150); });
 
   // ---------- layout: structure and density, a viewer's choice like the theme; each layout brings a default theme ----------
-  const LAYOUT_THEME = { "": "", compact: "slate" };
+  const LAYOUT_THEME = { "": "", compact: "slate", focus: "paper", wall: "midnight" };
   const setTheme = t => {
     if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
     $("#theme").value = t || "";
@@ -2029,6 +2242,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (l) document.documentElement.dataset.layout = l; else delete document.documentElement.dataset.layout;
     try { if (l) localStorage.setItem("projecttodo-layout", l); else localStorage.removeItem("projecttodo-layout"); } catch (err) { /* fine */ }
     setTheme(LAYOUT_THEME[l] || "");
+    state.agendaScrolled = false; state.calMonth = null;
     render();
   });
 

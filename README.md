@@ -42,9 +42,17 @@ to-dos you see.
 - **Live**: every change saves at once and shows up for everyone with the page open.
 - **Themes**: Auto (follows the system), Day, Night, Midnight, Forest, Ember, Paper,
   Rose and Slate, from the menu in the header; remembered per browser.
-- **Layouts**: Classic, and Compact (every lane one unit wide, tighter cards and
-  smaller type, smaller boxes on the timeline), from the menu beside the theme. A layout
-  brings its own default theme when chosen (Compact: Slate); the theme can still be changed.
+- **Layouts**, from the menu beside the theme; a layout changes the structure, a theme the
+  colours, and each layout brings a default theme when chosen (the theme can still be
+  changed). **Classic** is the board above. **Compact** (Slate): every lane one unit wide,
+  tighter cards and smaller type, smaller boxes on the timeline. **Focus** (Paper): one
+  column with Current first, a click shows a to-do's details docked on the right instead
+  of a modal, and the timeline is an agenda, one row per day with what starts, runs or
+  finishes on it, times included; board and agenda end at the bottom of the window and
+  scroll inside themselves, the agenda opening on today. **Wall** (Midnight): a grid of
+  equal cards with the lane as a tag on each, and the timeline is a month calendar, one
+  month in view, moved with the arrows or a sideways scroll; here a to-do changes lane
+  through its form.
 
 | Projects | Draft pad |
 |---|---|
@@ -57,6 +65,12 @@ to-dos you see.
 | ![Paper theme](docs/screenshots/theme-paper.png) | ![Midnight theme](docs/screenshots/theme-midnight.png) |
 
 ![The Compact layout on the Slate theme](docs/screenshots/layout-compact.png)
+
+| Focus (Paper) | Wall (Midnight) |
+|---|---|
+| ![The Focus layout](docs/screenshots/layout-focus.png) | ![The Wall layout](docs/screenshots/layout-wall.png) |
+
+![The Wall layout's calendar](docs/screenshots/layout-wall-calendar.png)
 
 ## Run it
 

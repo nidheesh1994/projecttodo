@@ -45,6 +45,9 @@ const SHOTS = [
   { file: "theme-paper.png", url: "/p/website", width: 1200, height: 540, theme: "paper" },
   { file: "theme-midnight.png", url: "/p/website", width: 1200, height: 540, theme: "midnight" },
   { file: "layout-compact.png", url: "/p/website", width: 1200, height: 540, theme: "slate", layout: "compact" },
+  { file: "layout-focus.png", url: "/p/website", width: 1200, height: 620, theme: "paper", layout: "focus", setup: `document.querySelector(".lane[data-lane='doing'] .card .fact").dispatchEvent(new MouseEvent("click", { bubbles: true }));` },
+  { file: "layout-wall.png", url: "/p/website", width: 1200, height: 540, theme: "midnight", layout: "wall" },
+  { file: "layout-wall-calendar.png", url: "/p/website/tree", width: 1200, height: 560, theme: "midnight", layout: "wall" },
 ];
 
 // ---- a tiny DevTools client
