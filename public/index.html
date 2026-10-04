@@ -248,8 +248,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
 .tl .days { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; font-weight: 400; }
 .tl .today-line { stroke: var(--today); stroke-dasharray: 3 3; stroke-width: 1.5; }
 .tl .today-lbl { fill: var(--today); font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
-.tl .now-hit rect { fill: transparent; cursor: help; pointer-events: all; }
-.tl .now-hit:hover ~ .today-line, .tl .now-hit:hover rect { fill: color-mix(in srgb, var(--today) 18%, transparent); }
+.tl .now-hit rect { fill: transparent; pointer-events: all; }
+.tl .today-line.hot { stroke-dasharray: none; stroke-width: 2; }
+.now-tip { position: absolute; transform: translate(-50%, 0); background: var(--fg); color: var(--bg); font-family: var(--font-mono); font-size: 11.5px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; box-shadow: var(--shadow); z-index: 3; }
 .tl .node { cursor: pointer; }
 .tl .node:hover .bar, .tl .node:focus-visible .bar { filter: brightness(1.12); }
 .tl .node:focus-visible { outline: none; }
@@ -1097,21 +1098,28 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const nowX = () => { const d = new Date(); return X.get(today) + dayW.get(today) * ((d.getHours() * 60 + d.getMinutes()) / 1440); };
     const nowLine = svgEl("line", { class: "today-line", x1: nowX(), y1: AXIS_H - 4, x2: nowX(), y2: height - FOOT + 4 });
     const nowHit = svgEl("g", { class: "now-hit" });
-    const nowBand = svgEl("rect", { x: nowX() - 6, y: AXIS_H - 4, width: 12, height: height - AXIS_H - FOOT + 8 });
-    const nowTip = svgEl("title");
-    nowHit.append(nowBand, nowTip);
+    const nowBand = svgEl("rect", { x: nowX() - 7, y: AXIS_H - 4, width: 14, height: height - AXIS_H - FOOT + 8 });
+    nowHit.append(nowBand);
     const nowLbl = svgText(nowX(), height - 6, "Today", { class: "today-lbl", "text-anchor": "middle" });
     svg.append(nowLine, nowLbl, nowHit);
+    // the time, in a tooltip of our own: it appears the moment the line is hovered and follows the line
+    const nowTip = el("div", { class: "now-tip", hidden: true });
+    const nowText = () => { const t = new Date(); return `Now ${pad2(t.getHours())}:${pad2(t.getMinutes())} · ${fmtDay(dayStr(today))}`; };
     const placeNow = () => {
-      const x = nowX(), t = new Date();
+      const x = nowX();
       nowLine.setAttribute("x1", x); nowLine.setAttribute("x2", x);
-      nowBand.setAttribute("x", x - 6);
+      nowBand.setAttribute("x", x - 7);
       nowLbl.setAttribute("x", x);
-      nowTip.textContent = `Now ${pad2(t.getHours())}:${pad2(t.getMinutes())} · ${fmtDay(dayStr(today))}`;
+      nowTip.style.left = `${x}px`;
+      nowTip.style.top = `${AXIS_H + 6}px`;
+      nowTip.textContent = nowText();
     };
+    nowBand.addEventListener("mouseenter", () => { nowTip.textContent = nowText(); nowTip.hidden = false; nowLine.classList.add("hot"); });
+    nowBand.addEventListener("mouseleave", () => { nowTip.hidden = true; nowLine.classList.remove("hot"); });
+    nowBand.addEventListener("mousemove", e => { const r = graph.getBoundingClientRect(); nowTip.style.top = `${Math.max(AXIS_H + 6, e.clientY - r.top - 34)}px`; });
     placeNow();
     state.tlNow = { placeNow, today };
-    graph.append(svg);
+    graph.append(svg, nowTip);
 
     for (const b of boxes) {
       const it = idx.byId.get(b.id), st = statusOf(it), sp = b.sp;
