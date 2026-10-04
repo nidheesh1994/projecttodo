@@ -923,6 +923,22 @@ svg.tl { display: block; font-family: var(--font-ui); }
     return { byId, kids, rows, parentOf };
   }
   const siblingsOf = (idx, parentId) => (idx.kids.get(parentId || null) || []).slice();
+  // The tree under a to-do as a flat list, done ones first at each level so finished work stacks at the top (user, 2026-10-04).
+  function linesUnder(idx, it) {
+    const base = idx.rows.find(r => r.it.id === it.id);
+    const out = [], seen = new Set([it.id]);
+    const walk = (parentId, depth) => {
+      const kids = idx.kids.get(parentId) || [];
+      for (const k of [...kids.filter(x => statusOf(x) === "done"), ...kids.filter(x => statusOf(x) !== "done")]) {
+        if (seen.has(k.id)) continue;
+        seen.add(k.id);
+        out.push({ it: k, depth, anc: [] });
+        walk(k.id, depth + 1);
+      }
+    };
+    walk(it.id, (base ? base.depth : 0) + 1);
+    return out;
+  }
 
   // ---------- writes ----------
   async function write(label, fn) {
@@ -1385,25 +1401,34 @@ svg.tl { display: block; font-family: var(--font-ui); }
     let at = months.findIndex(mo => want >= mo.start && want <= mo.end); if (at < 0) at = months.findIndex(mo => today >= mo.start && today <= mo.end); if (at < 0) at = 0;
     const show = i => { label.textContent = months[i] ? months[i].name : ""; };
     show(at);
-    requestAnimationFrame(() => { const els = strip.querySelectorAll(".cal-month"); if (els[at]) strip.scrollLeft = startOf(els[at]); });
+    // the strip opens on that month: set once the frame is laid out, and checked again shortly after in case the first set came too early
+    const openOn = () => { const els = strip.querySelectorAll(".cal-month"); if (els[at] && !gesture && !anim && Math.abs(strip.scrollLeft - startOf(els[at])) > 2) strip.scrollLeft = startOf(els[at]); show(at); };
+    requestAnimationFrame(openOn);
+    setTimeout(openOn, 120);
     strip.addEventListener("scroll", () => { const i = nearest(); show(i); state.calMonth = months[i].start; }, { passive: true });
     // a sideways scroll settles on the nearest month
-    // One month per gesture. A sideways trackpad or wheel swipe moves one month once it has travelled 40px, then waits for
-    // the gesture to end; a touch swipe of 30px moves one month in its direction (the strip does not pan natively).
-    let wheelAcc = 0, wheelQuiet = null, wheelFired = false;
+    // The strip follows the gesture: a sideways trackpad or wheel swipe, or a finger, drags the months along (with resistance
+    // past one month); when the gesture ends it settles one month in that direction if it went 40px, else back where it was.
+    let gesture = null;
+    const monthEls = () => strip.querySelectorAll(".cal-month");
+    const monthW = () => { const els = monthEls(); return els.length > 1 ? startOf(els[1]) - startOf(els[0]) : strip.clientWidth; };
+    const dragTo = d => { const w = monthW(); const soft = Math.abs(d) > w ? Math.sign(d) * (w + (Math.abs(d) - w) * 0.25) : d; strip.scrollLeft = gesture.base + soft; };
+    const beginGesture = () => { if (anim) { cancelAnimationFrame(anim.frame); clearTimeout(anim.timer); anim = null; } const i = nearest(); gesture = { base: startOf(monthEls()[i]), from: i, drag: 0, x: 0, timer: null }; };
+    const endGesture = () => { if (!gesture) return; const g = gesture; gesture = null; clearTimeout(g.timer); const step = Math.abs(g.drag) >= 40 ? Math.sign(g.drag) : 0; goTo(Math.max(0, Math.min(months.length - 1, g.from + step))); };
     strip.addEventListener("wheel", e => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;   // a vertical scroll belongs to the panel and the page
       e.preventDefault();
-      clearTimeout(wheelQuiet); wheelQuiet = setTimeout(() => { wheelAcc = 0; wheelFired = false; }, 220);
-      if (wheelFired) return;
-      wheelAcc += e.deltaX;
-      if (Math.abs(wheelAcc) >= 40) { wheelFired = true; go(wheelAcc > 0 ? 1 : -1); }
+      if (!gesture) beginGesture();
+      gesture.drag += e.deltaX;
+      dragTo(gesture.drag);
+      clearTimeout(gesture.timer); gesture.timer = setTimeout(endGesture, 140);
     }, { passive: false });
-    let touchX = null;
-    strip.addEventListener("touchstart", e => { touchX = e.touches[0].clientX; }, { passive: true });
-    strip.addEventListener("touchend", e => { if (touchX === null) return; const dx = e.changedTouches[0].clientX - touchX; touchX = null; if (Math.abs(dx) >= 30) go(dx < 0 ? 1 : -1); }, { passive: true });
+    strip.addEventListener("touchstart", e => { beginGesture(); gesture.x = e.touches[0].clientX; }, { passive: true });
+    strip.addEventListener("touchmove", e => { if (!gesture) return; gesture.drag = gesture.x - e.touches[0].clientX; dragTo(gesture.drag); }, { passive: true });
+    strip.addEventListener("touchend", endGesture, { passive: true });
+    strip.addEventListener("touchcancel", endGesture, { passive: true });
     // anything else that scrolls the strip (a keyboard, a scrollbar) settles on the nearest month
-    strip.addEventListener("scrollend", () => { if (anim) return; const els = strip.querySelectorAll(".cal-month"); const i = nearest(); if (Math.abs(startOf(els[i]) - strip.scrollLeft) > 2) animateTo(startOf(els[i])); });
+    strip.addEventListener("scrollend", () => { if (anim || gesture) return; const els = strip.querySelectorAll(".cal-month"); const i = nearest(); if (Math.abs(startOf(els[i]) - strip.scrollLeft) > 2) animateTo(startOf(els[i])); });
   }
 
   // ---------- dates and order ----------
@@ -1731,7 +1756,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     doc.hidden = !it.doc && !(Array.isArray(it.docs) && it.docs.length);
     const kidsBox = $("#dv-kids");
     kidsBox.replaceChildren();
-    const under = idx.rows.filter(r => r.anc.includes(it.id));
+    const under = linesUnder(idx, it);
     if (under.length) {
       const base = idx.rows.find(r => r.it.id === it.id);
       const done = under.filter(r => statusOf(r.it) === "done").length;
@@ -2115,7 +2140,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     }
   });
   $("#dm-list").addEventListener("paste", e => { const p = padSelection(); if (!p) return; e.preventDefault(); pasteLines(p, e.clipboardData.getData("text/plain") || ""); });
-  $("#dm-name").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); focusLine(0, 0); } });
+  $("#dm-name").addEventListener("keydown", e => { if (e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) { e.preventDefault(); focusLine(0, 0); } });
   if (matchMedia("(pointer: coarse)").matches) $("#dm-help").textContent = "Return: next line · ‹ ›: a level out or in · Add when done";
   $("#dm-sheet").addEventListener("mousedown", e => { if (e.target === $("#dm-sheet") || e.target === $("#dm-list")) { e.preventDefault(); focusLine(dm.lines.length - 1, 1e9); } });
   $("#dm-sheet").addEventListener("keydown", e => {
@@ -2196,7 +2221,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const st = statusOf(it);
     const isDraft = st === "draft";
     const base = idx.rows.find(r => r.it.id === it.id);
-    const lines = idx.rows.filter(r => r.anc.includes(it.id));
+    const lines = linesUnder(idx, it);
     const done = lines.filter(r => statusOf(r.it) === "done").length;
     const compact = isFolded(it.id, lane.key);
     const card = el("article", { class: `card ${st} group${compact ? " compact" : ""}`, "data-id": it.id, draggable: state.readOnly ? null : "true", tabindex: "0", role: "button", "aria-label": `${it.title || "Untitled"}, ${lane.label}` });
