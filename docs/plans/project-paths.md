@@ -62,3 +62,13 @@ change that later.
 ## Progress
 
 - 2026-10-04: plan written; waits for the decisions above.
+- 2026-10-04 (assistant, on the user's "do the current"): built with these defaults. Paths
+  are absolute, `~/…`, or relative to the server's data folder. One file per project,
+  `<data_dir>/todos.json`, holding the rows of every project that points at it; the
+  main file keeps the registry and the rows of projects without a folder. Changing a
+  folder moves the rows (the old file is written once more without them; rows already
+  in the new file are taken in). The documents folder is also the write folder for a
+  project that has one. The AgentRow project keeps the server's defaults; the
+  ProjectTodo project now points at `~/Documents/projecttodo/data` (git-ignored; commit
+  it if you want the rows in the repository) and `~/Documents/projecttodo/docs`. The
+  server reads and writes the folders you name; the README says so.

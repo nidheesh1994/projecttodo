@@ -20,7 +20,8 @@ and `write_doc`.
    and a child: move the line into the group's notes and delete it, unless it is a
    step that can be finished on its own. Ask when it could be either.
 4. Plan documents are markdown files written with `write_doc` and linked through the
-   to-do's `doc` field; `read_doc` reads them back. Keep the document's Plan checklist
+   to-do's `doc` field; `read_doc` reads them back. Pass `project_id` to both: each
+   project can have its own documents folder (`list_projects` shows it under `paths`). Keep the document's Plan checklist
    and the child to-dos in step.
 5. Start a to-do (status doing) the moment you begin it and finish it (status done) the
    moment you end it; the server stamps the dates and times of day. Never leave a

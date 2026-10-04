@@ -44,6 +44,7 @@ const SHOTS = [
   { file: "timeline.png", url: "/p/website/tree", width: 1200, height: 340, theme: "dark", setup: `document.getElementById("tl-wrap").scrollLeft = 0;` },
   { file: "theme-paper.png", url: "/p/website", width: 1200, height: 540, theme: "paper" },
   { file: "theme-midnight.png", url: "/p/website", width: 1200, height: 540, theme: "midnight" },
+  { file: "layout-compact.png", url: "/p/website", width: 1200, height: 540, theme: "slate", layout: "compact" },
 ];
 
 // ---- a tiny DevTools client
@@ -93,7 +94,7 @@ try {
     await page("Emulation.setDeviceMetricsOverride", { width: shot.width, height: shot.height, deviceScaleFactor: 2, mobile: false });
     await page("Page.navigate", { url: `${BASE}/` });
     await waitFor(`document.readyState === "complete"`);
-    await evaluate(`localStorage.setItem("projecttodo-theme", ${JSON.stringify(shot.theme)}); localStorage.removeItem("projecttodo-fold"); localStorage.setItem("projecttodo-zoom", "1"); true`);
+    await evaluate(`localStorage.setItem("projecttodo-theme", ${JSON.stringify(shot.theme)}); localStorage.removeItem("projecttodo-fold"); ${shot.layout ? `localStorage.setItem("projecttodo-layout", ${JSON.stringify(shot.layout)});` : `localStorage.removeItem("projecttodo-layout");`} localStorage.setItem("projecttodo-zoom", "1"); true`);
     await page("Page.navigate", { url: BASE + shot.url });
     await waitFor(`window.boardDebug && window.boardDebug.state.loaded && document.fonts.status === "loaded"`);
     if (shot.setup) await evaluate(`(() => { ${shot.setup} return true; })()`);

@@ -28,7 +28,7 @@ to right, children below their parent. A main to-do with no dates is drawn after
 before it. Making a main to-do the project's current one starts it today; when it is done, its end
 is the end of the last finished to-do under it.
 -->
-<script>try { const t = localStorage.getItem("projecttodo-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) { /* fine */ }</script>
+<script>try { const t = localStorage.getItem("projecttodo-theme"); if (t) document.documentElement.dataset.theme = t; const l = localStorage.getItem("projecttodo-layout"); if (l) document.documentElement.dataset.layout = l; } catch (e) { /* fine */ }</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
@@ -181,6 +181,35 @@ code { font-family: var(--font-mono); }
 .live.on .dot { background: var(--accent); }
 .live.err .dot { background: var(--danger); }
 .top-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+/* Compact layout: every lane one unit wide, tighter cards, smaller type; the timeline draws smaller boxes (see renderTimeline). */
+html[data-layout="compact"] body { font-size: 13px; }
+html[data-layout="compact"] .board { grid-auto-columns: calc((100% - 40px) / 5); gap: 10px; }
+html[data-layout="compact"] .lane[data-lane="draft"] { grid-column: span 1; }
+html[data-layout="compact"] .lane[data-lane="draft"] .cards { display: flex; columns: auto; }
+html[data-layout="compact"] .lane[data-lane="draft"] .card { margin-bottom: 0; }
+@media (max-width: 1040px) { html[data-layout="compact"] .board { grid-auto-columns: calc((100% - 20px) / 3); } }
+@media (max-width: 600px) { html[data-layout="compact"] .board { grid-auto-columns: 100%; } }
+html[data-layout="compact"] .lane { padding: 6px; }
+html[data-layout="compact"] .lane-head { padding: 2px 4px 6px; }
+html[data-layout="compact"] .lane-title { font-size: 11px; }
+html[data-layout="compact"] .cards { gap: 8px; }
+html[data-layout="compact"] .card { padding: 6px 8px 6px 9px; }
+html[data-layout="compact"] .card-title { font-size: 13px; }
+html[data-layout="compact"] .meta { margin-top: 3px; font-size: 11px; gap: 3px 6px; }
+html[data-layout="compact"] .chip { font-size: 10.5px; padding: 0 6px; }
+html[data-layout="compact"] .facts { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 2px 12px; }
+html[data-layout="compact"] .fact { gap: 6px; font-size: 11px; justify-content: flex-start; }
+html[data-layout="compact"] .fact-v { font-size: 10.5px; }
+html[data-layout="compact"] .card.group .notes { margin-top: 3px; }
+html[data-layout="compact"] .card.group .note-line { padding: 1px 3px; }
+html[data-layout="compact"] .card.group .note-text { font-size: 12px; line-height: 1.35; }
+html[data-layout="compact"] .note-check { width: 14px; height: 14px; font-size: 9px; margin-top: 2px; }
+html[data-layout="compact"] .note-in { font-size: 10px; }
+html[data-layout="compact"] .card.compact { padding: 4px 6px 4px 8px; }
+html[data-layout="compact"] .project-card { padding: 10px 12px; }
+html[data-layout="compact"] .tl text { font-size: 11px; }
+html[data-layout="compact"] .gbox { padding: 3px 7px; font-size: 11.5px; }
 .btn { border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg); border-radius: 6px; padding: 6px 11px; cursor: pointer; line-height: 1.3; }
 .btn:hover { background: var(--surface-2); }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
@@ -199,6 +228,8 @@ code { font-family: var(--font-mono); }
 .project-card { display: block; background: var(--surface); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); color: inherit; text-decoration: none; border: 1px solid transparent; min-width: 0; }
 .project-card:hover, .project-card:focus-visible { border-color: var(--accent); outline: none; }
 .project-card { position: relative; }
+.project-card .paths { margin-top: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.f .help { display: block; font-size: 11.5px; color: var(--muted); margin-top: 3px; font-weight: 400; line-height: 1.4; }
 .project-card .edit { position: absolute; top: 8px; right: 8px; opacity: 0; }
 .project-card:hover .edit, .project-card:focus-within .edit, .project-card .edit:focus-visible { opacity: 1; }
 .project-card .card-title { font-size: 16px; }
@@ -437,6 +468,10 @@ svg.tl { display: block; font-family: var(--font-ui); }
     <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
     <nav class="jump" aria-label="Pages"><a href="/" data-view="projects">Projects</a><a href="/" data-view="board" id="nav-board">Board</a><a href="/" data-view="tree" id="nav-tree">Timeline</a></nav>
     <div class="top-actions">
+      <select class="theme-pick" id="layout" aria-label="Layout" title="Layout">
+        <option value="">Classic</option>
+        <option value="compact">Compact</option>
+      </select>
       <select class="theme-pick" id="theme" aria-label="Theme" title="Theme">
         <option value="">Auto</option>
         <option value="light">Day</option>
@@ -507,6 +542,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     <div class="form">
       <label class="f full">Name<input id="pm-name" type="text" maxlength="120" required></label>
       <label class="f full">Description<input id="pm-desc" type="text" maxlength="300"></label>
+      <label class="f full">Data folder<input id="pm-data" type="text" maxlength="500" spellcheck="false"><span class="help">Where this project's to-dos file lives (a todos.json inside it). Absolute, ~/…, or relative to the server's data folder. Empty keeps it in the server's own file.</span></label>
+      <label class="f full">Documents folder<input id="pm-docs" type="text" maxlength="500" spellcheck="false"><span class="help">The folder a to-do's Doc path is read from, and where an assistant writes plan documents. Empty uses the server's folder.</span></label>
     </div>
     <div class="dialog-actions">
       <span class="spacer"></span>
@@ -637,6 +674,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     dragId: null,
     dragLane: null,     // the column being dragged by its header
     editingProject: null,   // the project open in the project form, or null when it makes a new one
+    defaults: {},           // the server's data and docs folders, shown as placeholders
     editing: null,
     pending: 0,
   };
@@ -859,7 +897,10 @@ svg.tl { display: block; font-family: var(--font-ui); }
       renumber(patches, sibs);
     }
     if (!patches.size) return;
+    const currentWasEmpty = !idx.rows.some(r => r.depth === 0 && r.it.id !== it.id && statusOf(r.it) === "doing");
     await applyPatches(patches);
+    // A main to-do dropped into an empty Current column becomes the project's current one; dropped beside another, it is a second card in progress (user, 2026-10-04).
+    if (was !== laneKey && laneKey === "doing" && !idx.parentOf(it) && currentWasEmpty) await setCurrent(it.id);
   }
   async function moveSibling(id, dir) {
     const idx = index();
@@ -1240,7 +1281,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     for (const m of mains) measure(m.id);
     // a day under a main to-do is as wide as its share of the tree needs
     const z = state.tlZoom || 1;   // zoom scales the days and the columns; the rows keep their height
-    const SLOT = Math.round(156 * z), MINDAY = Math.round(30 * z), BOX_H = 42, ROW_H = 62, GAP = 8, AXIS_H = 48, PAD = 16, FOOT = 22;
+    const compact = document.documentElement.dataset.layout === "compact";   // the Compact layout draws smaller boxes and days
+    const SLOT = Math.round((compact ? 124 : 156) * z), MINDAY = Math.round((compact ? 24 : 30) * z), BOX_H = compact ? 34 : 42, ROW_H = compact ? 50 : 62, GAP = 8, AXIS_H = compact ? 42 : 48, PAD = 16, FOOT = 22;
     const dayW = new Map();
     for (let d = min; d <= max; d++) dayW.set(d, MINDAY);
     for (const sp of mainList) { const n = sp.end - sp.start + 1; const need = Math.ceil(size.get(sp.it.id).w / n) * SLOT; for (let d = sp.start; d <= sp.end; d++) dayW.set(d, Math.max(dayW.get(d), need)); }
@@ -1894,7 +1936,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     body.replaceChildren(el("div", { class: "empty", text: "Loading the file…" }));
     $("#drawer").hidden = false;
     try {
-      const res = await fetch(`/api/doc?path=${encodeURIComponent(path)}`, { cache: "no-store" });
+      const res = await fetch(`/api/doc?path=${encodeURIComponent(path)}${state.project ? "&project=" + encodeURIComponent(state.project) : ""}`, { cache: "no-store" });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.message || `HTTP ${res.status}`);
       if (drawerPath !== path) return;
@@ -1922,6 +1964,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
         el("div", { class: "card-title", text: p.name }),
         state.readOnly ? null : el("button", { class: "icon-btn edit", type: "button", title: "Edit the project's name and description", "aria-label": `Edit ${p.name}`, onclick: e => { e.preventDefault(); e.stopPropagation(); openProjectModal(p); } }, "✎"),
         p.description ? el("div", { class: "notes", text: p.description }) : null,
+        p.data_dir || p.docs_dir ? el("div", { class: "paths" }, p.data_dir ? el("div", { text: `data ${p.data_dir}` }) : null, p.docs_dir ? el("div", { text: `docs ${p.docs_dir}` }) : null) : null,
         el("div", { class: "meta" }, el("span", { text: `${c.main || 0} main` }), el("span", { text: `${c.doing || 0} now` }), el("span", { text: `${c.todo || 0} next` }), el("span", { text: `${c.done || 0} done` }), c.draft ? el("span", { text: `${c.draft} drafts` }) : null),
         p.current ? el("div", { class: "current-line" }, el("b", { text: "Current: " }), p.current.title) : null));
     }
@@ -1935,6 +1978,10 @@ svg.tl { display: block; font-family: var(--font-ui); }
     $("#pm-save").textContent = project ? "Save" : "Create";
     $("#pm-name").value = project ? project.name : "";
     $("#pm-desc").value = project ? (project.description || "") : "";
+    $("#pm-data").value = project ? (project.data_dir || "") : "";
+    $("#pm-docs").value = project ? (project.docs_dir || "") : "";
+    $("#pm-data").placeholder = state.defaults.data_dir || "";
+    $("#pm-docs").placeholder = state.defaults.docs_dir || "";
     $("#pm").hidden = false;
     setTimeout(() => $("#pm-name").focus(), 0);
   }
@@ -1946,15 +1993,16 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const name = $("#pm-name").value.trim();
     if (!name) return;
     const description = $("#pm-desc").value.trim();
+    const data_dir = $("#pm-data").value.trim() || null, docs_dir = $("#pm-docs").value.trim() || null;
     if (state.editingProject) {
       const project = state.projects.find(p => p.id === state.editingProject);
       if (!project) { $("#pm").hidden = true; return; }
-      if (project.name === name && (project.description || "") === description) { $("#pm").hidden = true; return; }
-      const ok = await write("Saving the project", () => call("PATCH", `/api/projects/${encodeURIComponent(project.id)}`, { if_version: project.version, data: { name, description } }));
+      if (project.name === name && (project.description || "") === description && (project.data_dir || null) === data_dir && (project.docs_dir || null) === docs_dir) { $("#pm").hidden = true; return; }
+      const ok = await write("Saving the project", () => call("PATCH", `/api/projects/${encodeURIComponent(project.id)}`, { if_version: project.version, data: { name, description, data_dir, docs_dir } }));
       if (ok) { $("#pm").hidden = true; toast("Saved"); loadAll(); }
       return;
     }
-    const ok = await write("Creating the project", async () => { const payload = await call("POST", "/api/projects", { data: { name, description } }); location.href = `/p/${encodeURIComponent(payload.project.id)}`; });
+    const ok = await write("Creating the project", async () => { const payload = await call("POST", "/api/projects", { data: { name, description, data_dir, docs_dir } }); location.href = `/p/${encodeURIComponent(payload.project.id)}`; });
     if (ok) $("#pm").hidden = true;
   });
 
@@ -1967,6 +2015,22 @@ svg.tl { display: block; font-family: var(--font-ui); }
   }
   let resizeTimer = null;
   window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => renderTimeline(index()), 150); });
+
+  // ---------- layout: structure and density, a viewer's choice like the theme; each layout brings a default theme ----------
+  const LAYOUT_THEME = { "": "", compact: "slate" };
+  const setTheme = t => {
+    if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+    $("#theme").value = t || "";
+    try { if (t) localStorage.setItem("projecttodo-theme", t); else localStorage.removeItem("projecttodo-theme"); } catch (err) { /* fine */ }
+  };
+  $("#layout").value = document.documentElement.dataset.layout || "";
+  $("#layout").addEventListener("change", e => {
+    const l = e.target.value;
+    if (l) document.documentElement.dataset.layout = l; else delete document.documentElement.dataset.layout;
+    try { if (l) localStorage.setItem("projecttodo-layout", l); else localStorage.removeItem("projecttodo-layout"); } catch (err) { /* fine */ }
+    setTheme(LAYOUT_THEME[l] || "");
+    render();
+  });
 
   // ---------- theme ----------
   $("#theme").value = document.documentElement.dataset.theme || "";
@@ -2018,6 +2082,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (loading) return loading;
     loading = Promise.all([call("GET", "/api/projects"), state.project ? call("GET", `/api/todos?project=${encodeURIComponent(state.project)}`) : Promise.resolve({ todos: [] })]).then(([p, t]) => {
       state.projects = p.projects;
+      state.defaults = p.defaults || {};
       state.items = t.todos.map(x => ({ ...x }));
       state.loaded = true;
       const project = currentProject();

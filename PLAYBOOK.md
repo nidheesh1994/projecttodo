@@ -2,8 +2,10 @@
 
 How an assistant works the board with the person. The server hands this file to any
 MCP client through the `get_playbook` tool; `skills/projecttodo/SKILL.md` points Claude
-Code at it; for other assistants, put one line in their instructions: *before working
-on the to-do board, call `get_playbook` and follow it.*
+Code at it, and `skills/projecttodo-draft-submission/SKILL.md` is the
+`/projecttodo-draft-submission` command that submits one draft group; for other
+assistants, put one line in their instructions: *before working on the to-do board, call
+`get_playbook` and follow it.*
 
 ## The board in one minute
 
@@ -22,8 +24,11 @@ on the to-do board, call `get_playbook` and follow it.*
   needs, so the cheapest way to start or finish a to-do is the status change itself.
 - **Order**: siblings are sorted by `order` (10, 20, 30); `next_id` names the sibling
   that follows, which the timeline draws as an arrow.
-- **doc**: the path of a markdown file with the detailed plan, relative to the docs
-  folder. The page shows it in a drawer. `read_doc` and `write_doc` read and write it.
+- **doc**: the path of a markdown file with the detailed plan, relative to the
+  project's docs folder. The page shows it in a drawer. `read_doc` and `write_doc` read
+  and write it; give them `project_id`, since a project can have folders of its own
+  (`list_projects` shows them under `paths`: where its rows file is, where its
+  documents are read from, where new ones are written).
 - **Current**: `set_current` makes one main to-do the project's current one. It goes to
   Current and starts today. When it is done, its end is the end of its last finished
   child.
@@ -72,6 +77,14 @@ Take **one draft group at a time**, in board order.
      order with `next_id`; children that wait go to `deferred`.
 4. Lines the person wants dropped: ask once, then `delete_todo`.
 5. Say what you changed, in one short list.
+
+## When a document is written
+
+Decide it yourself; the person should not have to ask each time. Write a plan document
+(with `write_doc`, template below) when any of these holds: the group has three or more
+steps; its estimate is half a day or more; a decision has to be recorded; the person
+asked for one. Skip it for a small fix with one obvious step, and say that you skipped it.
+Put the path in the to-do's `doc` so the board can open it.
 
 ## Planning a to-do
 

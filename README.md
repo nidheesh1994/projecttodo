@@ -8,7 +8,11 @@ to-dos you see.
 ![The board: Drafts, Current and Next, with Done and Later off to the right](docs/screenshots/board.png)
 
 - **Projects** on the first page, each a card. Open one for its board; the pencil on a card
-  edits its name and description.
+  edits its name, description and folders. A project can keep its to-dos in a folder of
+  its own (`todos.json` inside it, so a repository can commit its own rows) and read and
+  write its documents in its own folder; both are asked for when the project is made and
+  default to the server's folders. The server reads and writes whichever folders you name,
+  which is fine on your own machine and the reason it should stay there.
 - **Board**: lanes for Drafts, Current, Next, Done and Later. Press **+** on Drafts (or
   "New draft") and type a title and a list like a notepad: Enter for the next line, Tab
   for a child, Shift+Tab back out. "Add" makes one draft card with those lines. You go
@@ -29,12 +33,18 @@ to-dos you see.
   differ. The project's **current** main to-do is outlined: setting it starts it today;
   when it is done, its end is the end of the last finished to-do under it. So by
   finishing things, every to-do ends up with its real dates.
+  A main to-do dropped into an empty Current lane becomes the current one; dropped beside
+  another it is a second card in progress; moved out of Current or finished, it stops being
+  current.
   The timeline opens on today, a line walks across today's column with the time (hover it
   to read it), and the view zooms with the − and + buttons, Cmd and scroll, or Cmd and
   minus, plus and 0.
 - **Live**: every change saves at once and shows up for everyone with the page open.
 - **Themes**: Auto (follows the system), Day, Night, Midnight, Forest, Ember, Paper,
   Rose and Slate, from the menu in the header; remembered per browser.
+- **Layouts**: Classic, and Compact (every lane one unit wide, tighter cards and
+  smaller type, smaller boxes on the timeline), from the menu beside the theme. A layout
+  brings its own default theme when chosen (Compact: Slate); the theme can still be changed.
 
 | Projects | Draft pad |
 |---|---|
@@ -45,6 +55,8 @@ to-dos you see.
 | Paper | Midnight |
 |---|---|
 | ![Paper theme](docs/screenshots/theme-paper.png) | ![Midnight theme](docs/screenshots/theme-midnight.png) |
+
+![The Compact layout on the Slate theme](docs/screenshots/layout-compact.png)
 
 ## Run it
 
@@ -97,7 +109,7 @@ behind one.
 Tools: `get_playbook`, `list_projects`, `create_project`, `list_todos`, `get_todo`,
 `create_todo`, `update_todo`, `delete_todo`, `set_current`, `add_draft`, `read_doc`,
 `write_doc`. Prompts (clients that list MCP prompts, such as Claude Desktop, offer them
-as commands): `review_drafts`, `plan_todo`, `daily_review`.
+as commands): `review_drafts`, `submit_draft`, `plan_todo`, `daily_review`.
 
 ## Teach your assistant the workflow
 
@@ -108,14 +120,17 @@ estimates), how to review draft groups one at a time, how to plan a to-do with a
 document, and the document template. The server sends a summary when a client connects,
 and the `get_playbook` tool returns the whole file, so every MCP client can read it.
 
-- **Claude Code**: install the skill once, and Claude calls `get_playbook` whenever the
-  board comes up:
+- **Claude Code**: install the skills once. The first makes Claude call `get_playbook`
+  whenever the board comes up; the second is the `/projecttodo-draft-submission` command,
+  which takes one draft group and submits it as planned to-dos, writing the plan document
+  when the playbook's rule calls for one (`/projecttodo-draft-submission the first draft`,
+  `/projecttodo-draft-submission "Board page updates", start it now`):
 
   ```bash
-  mkdir -p ~/.claude/skills && cp -r /path/to/projecttodo/skills/projecttodo ~/.claude/skills/
+  mkdir -p ~/.claude/skills && cp -r /path/to/projecttodo/skills/* ~/.claude/skills/
   ```
 
-  (or copy it into a project's `.claude/skills/` to keep it per repository).
+  (or copy them into a project's `.claude/skills/` to keep them per repository).
 - **Claude Desktop**: the summary arrives with the connection; the prompts above appear
   as commands.
 - **Anything else** (a ChatGPT connector, another agent): add one line to its
@@ -123,13 +138,17 @@ and the `get_playbook` tool returns the whole file, so every MCP client can read
   `get_playbook` and follow it.*
 
 Plan documents are markdown files the assistant writes with `write_doc` into the write
-folder (`--write-docs`, default `todos/` under the docs folder) and links through the
-to-do's `doc` field; the page shows them in the drawer, and `read_doc` reads them back.
+folder (`--write-docs`, default `todos/` under the docs folder; a project with its own
+documents folder writes straight into it) and links through the to-do's `doc` field; the
+page shows them in the drawer, and `read_doc` reads them back. Both tools take the
+`project_id`, and `list_projects` tells an assistant each project's folders.
 Edit the playbook to fit how you work; the assistant reads it fresh each time.
 
 ## Rows
 
-A project: `id, name, description, current_id, created_at, updated_at, version`.
+A project: `id, name, description, data_dir, docs_dir, lanes ({order, colors}), current_id,
+created_at, updated_at, version`. `data_dir` and `docs_dir` are empty for the server's
+defaults; the listing adds `paths` with the folders in use.
 
 A to-do:
 
