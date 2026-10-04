@@ -67,6 +67,10 @@ Take **one draft group at a time**, in board order.
    the project" / "need a way to edit the name and description"), put its text in the
    group's `notes` and delete the line; keep it as a child only when it is a step
    that can be finished on its own. Ask when it could be either.
+   **A draft with no title** is a loose list the person jotted down. Read the lines,
+   group them into one or more to-dos, propose a title for each, and wait for the
+   answer; then give the group the first title (or delete it once its lines have moved
+   to the new to-dos). A to-do cannot leave Drafts without a title.
 3. For the agreed group:
    - write the plan document with `write_doc` (template below) and put its path in
      the group's `doc`;

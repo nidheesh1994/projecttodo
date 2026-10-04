@@ -15,8 +15,12 @@ to-dos you see.
   which is fine on your own machine and the reason it should stay there.
 - **Board**: lanes for Drafts, Current, Next, Done and Later. Press **+** on Drafts (or
   "New draft") and type a title and a list like a notepad: Enter for the next line, Tab
-  for a child, Shift+Tab back out. "Add" makes one draft card with those lines. You go
-  through the drafts with your assistant; it fills in the details and moves them on.
+  for a child, Shift+Tab back out; the pad is one text field, so you can select across
+  lines, copy the list, or paste a list in (each line becomes a line). "Add" makes one
+  draft card with those lines; the title can wait, an untitled draft is a loose list the
+  assistant groups and titles when it is submitted, and a to-do needs a title before it
+  leaves Drafts. You go through the drafts with your assistant; it fills in the details
+  and moves them on.
   A card is a main to-do; everything under it is listed inside the card, ticked when
   done. Drag cards between lanes. Click a card's header to fold it to one row or open
   it again (Done and Later cards start folded); double-click the header to edit the
@@ -40,6 +44,9 @@ to-dos you see.
   to read it), and the view zooms with the − and + buttons, Cmd and scroll, or Cmd and
   minus, plus and 0.
 - **Live**: every change saves at once and shows up for everyone with the page open.
+- **On a phone**: one lane at a time on the board, swiped sideways; dialogs open at the top
+  so the keyboard does not cover them; the draft pad has ‹ › buttons for levels since a phone
+  has no Tab key; touch targets are larger and hover-only controls are always shown.
 - **Themes**: Auto (follows the system), Day, Night, Midnight, Forest, Ember, Paper,
   Rose and Slate, from the menu in the header; remembered per browser.
 - **Layouts**, from the menu beside the theme; a layout changes the structure, a theme the

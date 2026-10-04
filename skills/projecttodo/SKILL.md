@@ -18,7 +18,8 @@ and `write_doc`.
    and how many drafts wait.
 3. A draft group with one line is usually a title and its explanation, not a parent
    and a child: move the line into the group's notes and delete it, unless it is a
-   step that can be finished on its own. Ask when it could be either.
+   step that can be finished on its own. Ask when it could be either. A draft with no
+   title is a loose list: group its lines into to-dos and propose their titles first.
 4. Plan documents are markdown files written with `write_doc` and linked through the
    to-do's `doc` field; `read_doc` reads them back. Pass `project_id` to both: each
    project can have its own documents folder (`list_projects` shows it under `paths`). Keep the document's Plan checklist

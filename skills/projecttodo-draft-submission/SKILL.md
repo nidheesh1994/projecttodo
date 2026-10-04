@@ -20,6 +20,8 @@ apply ("owner me", "after the marketplace work", "no document").
    - a group with **one line** that only explains the title: the line's text goes into
      the group's `notes` and the line is deleted; it stays a child only when it is a step
      that can be finished on its own;
+   - a group with **no title**: a loose list; group the lines into one or more to-dos,
+     propose a title for each, and wait for the answer before writing anything;
    - lines that are questions or notes: into `notes`, not children;
    - a truncated or unclear title: tidy it, and say so;
    - lines that are steps: children with `status: todo`, an owner, an estimate, chained

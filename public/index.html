@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ProjectTodo</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <!--
@@ -45,6 +47,8 @@ is the end of the last finished to-do under it.
 .dm-list .note-text { font-size: 15px; line-height: 1.5; min-height: 22px; }
 .dm-list .note-check { margin-top: 4px; }
 .dm-help { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.dm-ctl { display: none; gap: 2px; flex: none; align-self: center; }
+.dm-ctl .icon-btn { width: 30px; height: 30px; font-size: 18px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 .card.group .notes { margin-top: 6px; color: var(--muted); }
 .card.group .note-line { cursor: pointer; border-radius: 6px; padding: 3px 4px; margin: 0 -4px; }
 .card.group .note-line:hover { background: var(--surface-2); }
@@ -268,7 +272,7 @@ html[data-layout="wall"] .zoom { display: none; }
 .cal-nav { display: flex; align-items: center; gap: 4px; margin: 0 0 8px; }
 .cal-nav h3 { margin: 0 auto 0 8px; font-size: 14px; }
 .cal-nav .icon-btn { font-size: 18px; line-height: 1; padding: 2px 8px; }
-.cal-strip { display: flex; gap: 16px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.cal-strip { display: flex; gap: 16px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; touch-action: pan-y; }
 .cal-strip::-webkit-scrollbar { display: none; }
 .cal-month { flex: 0 0 100%; min-width: 0; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
@@ -388,7 +392,7 @@ section { margin-top: 26px; }
 @media (min-width: 601px) {
   .lane[data-lane="draft"] .cards { display: block; columns: 2; column-gap: 8px; }
   .lane[data-lane="draft"] .card { break-inside: avoid; margin-bottom: 12px; }
-  .lane[data-lane="draft"] .empty { column-span: all; }
+  .lane[data-lane="draft"] .cards > .empty { column-span: all; }   /* the lane's own placeholder only, never a card's "no lines yet" */
 }
 .card { background: var(--surface); border-radius: 8px; padding: 9px 10px 8px; box-shadow: var(--shadow); cursor: pointer; min-width: 0; border-left: 3px solid transparent; }
 .card .card-top { cursor: pointer; }
@@ -403,6 +407,9 @@ section { margin-top: 26px; }
 .card-top { display: flex; align-items: flex-start; gap: 4px; }
 .card-title { font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; padding-top: 1px; }
 .card.deferred .card-title { color: var(--muted); font-weight: 500; }
+.card-title.untitled { color: var(--muted); font-weight: 500; font-style: italic; }
+.dm-ctl { user-select: none; }
+.dm-list .note-check { user-select: none; }
 .ctl { display: flex; gap: 0; flex-shrink: 0; }
 .icon-btn { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 2px 5px; border-radius: 4px; line-height: 1.2; font-size: 13px; }
 .icon-btn:hover { background: var(--surface-2); color: var(--fg); }
@@ -534,6 +541,28 @@ svg.tl { display: block; font-family: var(--font-ui); }
   .toast { animation: rise 0.18s ease-out; }
   @keyframes rise { from { transform: translate(-50%, 8px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
 }
+
+/* Touch screens: what only shows on hover is always visible, targets grow, the draft pad gets its level buttons, and text fields are 16px so iOS does not zoom into them. (Last in the sheet, so these win.) */
+@media (pointer: coarse) {
+  .dm-ctl { display: flex; }
+  .project-card .edit, .note-more { opacity: 1; }
+  .note-check, .dm-list .note-check { width: 22px; height: 22px; font-size: 12px; }
+  .card.group .note-line { padding: 5px 4px; }
+  .lane-ctl .icon-btn, .project-card .edit { width: 32px; height: 32px; }
+  .ctl .icon-btn { min-width: 30px; min-height: 30px; }
+  .form input, .form select, .form textarea, select.theme-pick, .dm-list .note-text { font-size: 16px; }
+  .card, .lane-head, .note-line, .gbox, .agenda-item, .cal-chip { touch-action: manipulation; }
+}
+/* Phone widths: dialogs start at the top so the keyboard does not cover them, and the page gutters shrink. */
+@media (max-width: 600px) {
+  .modal { align-items: flex-start; padding: 8px; }
+  .dialog { max-height: calc(100dvh - 16px); padding: 14px; }
+  .dm-sheet { max-height: 48dvh; }
+  .wrap { padding-inline: 10px; padding-top: 10px; }
+  .top-left { gap: 6px 12px; }
+  .project-title { font-size: 16px; }
+  .sec-head h2 { font-size: 15px; }
+}
 </style>
 
 <div class="wrap">
@@ -639,7 +668,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       <input id="dm-name" class="dm-title" type="text" maxlength="200" placeholder="Title" aria-label="Title">
       <div class="dm-list" id="dm-list"></div>
     </div>
-    <p class="dm-help">Enter: next line · Tab: child · Shift+Tab: back out · Cmd+Enter: add</p>
+    <p class="dm-help" id="dm-help">Enter: next line · Tab: child · Shift+Tab: back out · Cmd+Enter: add</p>
     <div class="confirm" id="dm-confirm" hidden>
       <span class="q" id="dm-confirm-text"></span>
       <button class="btn danger solid" type="button" id="dm-delete-yes">Yes, delete</button>
@@ -1358,6 +1387,21 @@ svg.tl { display: block; font-family: var(--font-ui); }
     requestAnimationFrame(() => { const els = strip.querySelectorAll(".cal-month"); if (els[at]) strip.scrollLeft = startOf(els[at]); });
     strip.addEventListener("scroll", () => { const i = nearest(); show(i); state.calMonth = months[i].start; }, { passive: true });
     // a sideways scroll settles on the nearest month
+    // One month per gesture. A sideways trackpad or wheel swipe moves one month once it has travelled 40px, then waits for
+    // the gesture to end; a touch swipe of 30px moves one month in its direction (the strip does not pan natively).
+    let wheelAcc = 0, wheelQuiet = null, wheelFired = false;
+    strip.addEventListener("wheel", e => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;   // a vertical scroll belongs to the panel and the page
+      e.preventDefault();
+      clearTimeout(wheelQuiet); wheelQuiet = setTimeout(() => { wheelAcc = 0; wheelFired = false; }, 220);
+      if (wheelFired) return;
+      wheelAcc += e.deltaX;
+      if (Math.abs(wheelAcc) >= 40) { wheelFired = true; go(wheelAcc > 0 ? 1 : -1); }
+    }, { passive: false });
+    let touchX = null;
+    strip.addEventListener("touchstart", e => { touchX = e.touches[0].clientX; }, { passive: true });
+    strip.addEventListener("touchend", e => { if (touchX === null) return; const dx = e.changedTouches[0].clientX - touchX; touchX = null; if (Math.abs(dx) >= 30) go(dx < 0 ? 1 : -1); }, { passive: true });
+    // anything else that scrolls the strip (a keyboard, a scrollbar) settles on the nearest month
     strip.addEventListener("scrollend", () => { if (anim) return; const els = strip.querySelectorAll(".cal-month"); const i = nearest(); if (Math.abs(startOf(els[i]) - strip.scrollLeft) > 2) animateTo(startOf(els[i])); });
   }
 
@@ -1874,7 +1918,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     return r.toString().length;
   }
   function setCaret(node, offset) {
-    node.focus();
+    const host = node.closest("[contenteditable]");
+    if (host && host !== node) host.focus(); else node.focus();
     const sel = getSelection();
     const range = document.createRange();
     const text = node.firstChild;
@@ -1914,64 +1959,154 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (node) setCaret(node, caret);
     dm.focus = { index: i, caret };
   }
+  // The pad is one editing host (#dm-list): the lines are blocks inside it, so a drag or Cmd+A selects across them and a copy
+  // gives the list as text. The circles and the ‹ › buttons are not editable. Edits inside one line are the browser's and are
+  // read back on input; anything that would cross lines (Enter, Backspace at the start, Delete at the end, a selection over
+  // several lines, a paste with newlines) is done here on dm.lines and the list is drawn again.
   function renderDraftLines(keepFocus = true) {
     const list = $("#dm-list");
     list.replaceChildren();
     dm.lines.forEach((line, i) => {
-      const body = el("div", { class: "note-text", contenteditable: "plaintext-only", spellcheck: "true", "data-placeholder": "Type a to-do", "data-index": String(i) });
+      const body = el("div", { class: "note-text", spellcheck: "true", "data-placeholder": "Type a to-do", "data-index": String(i) });
       body.textContent = line.text;
-      body.addEventListener("input", () => { line.text = body.textContent.replace(/\n/g, " "); });
-      body.addEventListener("paste", e => { e.preventDefault(); document.execCommand("insertText", false, (e.clipboardData.getData("text/plain") || "").replace(/\s*\n\s*/g, " ")); });
-      body.addEventListener("keydown", e => draftLineKey(e, i, body));
-      list.append(el("div", { class: "note-line", style: `margin-left:${line.depth * 22}px` }, el("span", { class: "note-check static", "aria-hidden": "true" }), el("div", { class: "note-main" }, body)));
+      const ctl = el("span", { class: "dm-ctl", contenteditable: "false" },
+        el("button", { class: "icon-btn", type: "button", tabindex: "-1", title: "A level out", "aria-label": "A level out", onmousedown: e => e.preventDefault(), onclick: () => { syncLines(); shiftLine(i, -1); } }, "‹"),
+        el("button", { class: "icon-btn", type: "button", tabindex: "-1", title: "A level in", "aria-label": "A level in", onmousedown: e => e.preventDefault(), onclick: () => { syncLines(); shiftLine(i, 1); } }, "›"));
+      list.append(el("div", { class: "note-line", style: `margin-left:${line.depth * 22}px` }, el("span", { class: "note-check static", contenteditable: "false", "aria-hidden": "true" }), el("div", { class: "note-main" }, body), ctl));
     });
     if (keepFocus) focusLine(dm.focus.index, dm.focus.caret);
   }
+  const lineBodies = () => [...$("#dm-list").querySelectorAll(".note-text")];
+  // what the browser changed inside the lines, read back into dm.lines
+  function syncLines() { lineBodies().forEach((b, i) => { if (dm.lines[i]) dm.lines[i].text = b.textContent.replace(/\n/g, " "); }); }
+  // where the selection is, as line indexes and offsets (start before end)
+  function padSelection() {
+    const sel = getSelection();
+    if (!sel.rangeCount) return null;
+    const bodies = lineBodies();
+    const at = node => { const body = (node.nodeType === 1 ? node : node.parentNode).closest(".note-text"); return body ? bodies.indexOf(body) : -1; };
+    const r = sel.getRangeAt(0);
+    let si = at(r.startContainer), ei = at(r.endContainer);
+    if (si < 0 && ei < 0) return null;
+    if (si < 0) si = ei; if (ei < 0) ei = si;
+    const off = (i, container, offset) => { const rr = document.createRange(); rr.selectNodeContents(bodies[i]); try { rr.setEnd(container, offset); } catch (e) { return bodies[i].textContent.length; } return rr.toString().length; };
+    return { si, so: off(si, r.startContainer, r.startOffset), ei, eo: off(ei, r.endContainer, r.endOffset), multi: si !== ei };
+  }
+  // a selection over several lines replaced by text (possibly none): the lines between go, the ends join
+  function replaceAcross(p, text) {
+    syncLines();
+    const first = dm.lines[p.si], last = dm.lines[p.ei];
+    const head = first.text.slice(0, p.so), tail = last.text.slice(p.eo);
+    const end = subtreeEnd(p.ei);
+    for (let j = p.ei + 1; j < end; j++) dm.lines[j].depth = Math.max(0, dm.lines[j].depth - 1);
+    dm.lines.splice(p.si + 1, p.ei - p.si);
+    first.text = head + text + tail;
+    dm.focus = { index: p.si, caret: head.length + text.length };
+    renderDraftLines();
+  }
+  // a paste: the first part goes into the line at the caret, each further line of the clipboard becomes a line below it
+  function pasteLines(p, raw) {
+    const parts = String(raw).replace(/\r/g, "").split("\n").map(t => t.replace(/\s+$/, ""));
+    while (parts.length > 1 && parts[parts.length - 1] === "") parts.pop();
+    if (p.multi) replaceAcross(p, "");
+    syncLines();
+    const i = p.si, line = dm.lines[i];
+    const caret = p.multi ? p.so : p.so;
+    const head = line.text.slice(0, caret), tail = p.multi ? line.text.slice(caret) : line.text.slice(p.eo);
+    const depthOf = t => { const m = t.match(/^(\t+| {2,})/); return m ? (m[0].includes("\t") ? m[0].length : Math.floor(m[0].length / 2)) : 0; };
+    line.text = head + parts[0].replace(/^(\t+| {2,})/, "").replace(/^[-*•]\s+/, "");
+    const extra = parts.slice(1).map(t => dmLine(t.replace(/^(\t+| {2,})/, "").replace(/^[-*•]\s+/, ""), Math.min(line.depth + depthOf(t), line.depth + 1)));
+    dm.lines.splice(i + 1, 0, ...extra);
+    if (extra.length) { extra[extra.length - 1].text += tail; dm.focus = { index: i + extra.length, caret: extra[extra.length - 1].text.length - tail.length }; }
+    else { line.text += tail; dm.focus = { index: i, caret: line.text.length - tail.length }; }
+    renderDraftLines();
+  }
+  // A line one level in or out, with the lines under it; from the Tab key, or from the ‹ › buttons on a touch screen.
+  function shiftLine(i, dir, body) {
+    const line = dm.lines[i];
+    const p = padSelection();
+    const caret = p && p.si === i ? p.so : (body ? caretOffset(body) : 1e9);
+    syncLines();
+    const end = subtreeEnd(i);
+    if (dir > 0) {
+      if (i === 0 || line.depth > dm.lines[i - 1].depth) return;   // at most one level below the line above
+      for (let j = i; j < end; j++) dm.lines[j].depth += 1;
+    } else {
+      if (line.depth === 0) return;
+      for (let j = i; j < end; j++) dm.lines[j].depth -= 1;
+    }
+    dm.focus = { index: i, caret };
+    renderDraftLines();
+  }
   // The lines below a line that sit deeper are its subtree: they move with it.
   function subtreeEnd(i) { let j = i + 1; while (j < dm.lines.length && dm.lines[j].depth > dm.lines[i].depth) j++; return j; }
-  function draftLineKey(e, i, body) {
-    const line = dm.lines[i];
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); line.text = body.textContent; $("#dm-form").requestSubmit(); return; }
-    if (e.key === "Enter" && !e.shiftKey) {
+  function draftLineKey(e) {
+    const p = padSelection();
+    if (!p) return;
+    const i = p.si, line = dm.lines[i], body = lineBodies()[i];
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); syncLines(); $("#dm-form").requestSubmit(); return; }
+    if (e.key === "Enter") {
       e.preventDefault();
-      const at = caretOffset(body);
-      const full = body.textContent;
-      line.text = full.slice(0, at);
-      const hasKids = i + 1 < dm.lines.length && dm.lines[i + 1].depth > line.depth;
-      dm.lines.splice(i + 1, 0, dmLine(full.slice(at), hasKids ? line.depth + 1 : line.depth));
-      dm.focus = { index: i + 1, caret: 0 };
+      if (p.multi) replaceAcross(p, "");
+      syncLines();
+      const cur = dm.lines[p.si], full = cur.text, at = p.multi ? p.so : p.so;
+      if (!p.multi && p.so !== p.eo) { cur.text = full.slice(0, p.so) + full.slice(p.eo); }
+      const text = cur.text, cut = Math.min(at, text.length);
+      cur.text = text.slice(0, cut);
+      const hasKids = p.si + 1 < dm.lines.length && dm.lines[p.si + 1].depth > cur.depth;
+      dm.lines.splice(p.si + 1, 0, dmLine(text.slice(cut), hasKids ? cur.depth + 1 : cur.depth));
+      dm.focus = { index: p.si + 1, caret: 0 };
       renderDraftLines();
       return;
     }
-    if (e.key === "Tab") {
+    if (e.key === "Tab") { e.preventDefault(); shiftLine(i, e.shiftKey ? -1 : 1, body); return; }
+    if (p.multi && (e.key === "Backspace" || e.key === "Delete")) { e.preventDefault(); replaceAcross(p, ""); return; }
+    if (e.key === "Backspace" && p.so === 0 && p.eo === 0 && i > 0) {
+      // at the start of a line: it joins the line above
       e.preventDefault();
-      const caret = caretOffset(body);
-      line.text = body.textContent;
+      syncLines();
+      const prev = dm.lines[i - 1], caret = prev.text.length;
       const end = subtreeEnd(i);
-      if (!e.shiftKey) {
-        if (i === 0 || line.depth > dm.lines[i - 1].depth) return;   // at most one level below the line above
-        for (let j = i; j < end; j++) dm.lines[j].depth += 1;
-      } else {
-        if (line.depth === 0) return;
-        for (let j = i; j < end; j++) dm.lines[j].depth -= 1;
-      }
+      for (let j = i + 1; j < end; j++) dm.lines[j].depth = Math.max(0, dm.lines[j].depth - 1);
+      prev.text += line.text;
+      dm.lines.splice(i, 1);
+      dm.focus = { index: i - 1, caret };
+      renderDraftLines();
+      return;
+    }
+    if (e.key === "Delete" && p.so === p.eo && p.so >= line.text.length && i + 1 < dm.lines.length) {
+      // at the end of a line: the line below joins it
+      e.preventDefault();
+      syncLines();
+      const caret = line.text.length, next = dm.lines[i + 1];
+      const end = subtreeEnd(i + 1);
+      for (let j = i + 2; j < end; j++) dm.lines[j].depth = Math.max(0, dm.lines[j].depth - 1);
+      line.text += next.text;
+      dm.lines.splice(i + 1, 1);
       dm.focus = { index: i, caret };
       renderDraftLines();
       return;
     }
-    if (e.key === "Backspace" && body.textContent === "" && dm.lines.length > 1) {
-      e.preventDefault();
-      const end = subtreeEnd(i);
-      for (let j = i + 1; j < end; j++) dm.lines[j].depth = Math.max(0, dm.lines[j].depth - 1);
-      dm.lines.splice(i, 1);
-      dm.focus = { index: Math.max(0, i - 1), caret: 1e9 };
-      renderDraftLines();
-      return;
-    }
-    if (e.key === "ArrowUp" && i > 0) { e.preventDefault(); line.text = body.textContent; focusLine(i - 1, caretOffset(body)); return; }
-    if (e.key === "ArrowDown" && i + 1 < dm.lines.length) { e.preventDefault(); line.text = body.textContent; focusLine(i + 1, caretOffset(body)); return; }
+    if (e.key === "ArrowUp" && i > 0 && !e.shiftKey) { e.preventDefault(); syncLines(); focusLine(i - 1, p.so); return; }
+    if (e.key === "ArrowDown" && i + 1 < dm.lines.length && !e.shiftKey) { e.preventDefault(); syncLines(); focusLine(i + 1, p.so); return; }
   }
+  $("#dm-list").setAttribute("contenteditable", "plaintext-only");
+  $("#dm-list").addEventListener("keydown", draftLineKey);
+  $("#dm-list").addEventListener("input", () => syncLines());
+  // a selection over several lines, replaced by typing or a cut, is handled here so the circles and buttons stay whole
+  $("#dm-list").addEventListener("beforeinput", e => {
+    const p = padSelection();
+    if (!p || !p.multi) return;
+    if (e.inputType === "insertText" || e.inputType === "deleteContentBackward" || e.inputType === "deleteContentForward" || e.inputType === "deleteByCut" || e.inputType === "insertFromPaste") {
+      e.preventDefault();
+      if (e.inputType === "insertFromPaste") return;   // the paste handler takes it
+      if (e.inputType === "deleteByCut") document.execCommand("copy");
+      replaceAcross(p, e.inputType === "insertText" ? (e.data || "") : "");
+    }
+  });
+  $("#dm-list").addEventListener("paste", e => { const p = padSelection(); if (!p) return; e.preventDefault(); pasteLines(p, e.clipboardData.getData("text/plain") || ""); });
   $("#dm-name").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); focusLine(0, 0); } });
+  if (matchMedia("(pointer: coarse)").matches) $("#dm-help").textContent = "Return: next line · ‹ ›: a level out or in · Add when done";
   $("#dm-sheet").addEventListener("mousedown", e => { if (e.target === $("#dm-sheet") || e.target === $("#dm-list")) { e.preventDefault(); focusLine(dm.lines.length - 1, 1e9); } });
   $("#dm-sheet").addEventListener("keydown", e => {
     if (e.key !== "Tab" || e.defaultPrevented) return;
@@ -1984,7 +2119,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
   $("#dm-form").addEventListener("submit", async e => {
     e.preventDefault();
     const title = $("#dm-name").value.trim();
-    if (!title) { toast("Give the draft a title.", true); $("#dm-name").focus(); return; }
+    syncLines();
     const idx = index();
     const stamp = nowIso();
     const lines = dm.lines.filter(l => l.text.trim() !== "");
@@ -1993,7 +2128,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const row = (id, text, parentId, order) => ({ id, project_id: state.project, title: text, notes: "", parent_id: parentId, next_id: null, order, status: "draft", owner: "user", doc: null, estimate_days: null, planned_start: null, planned_end: null, actual_start: null, actual_done: null, created_at: stamp, updated_at: stamp });
     const writes = [];
     const group = dm.groupId ? idx.byId.get(dm.groupId) : null;
-    let groupId = group ? group.id : unique(newId(title));
+    if (!title && !lines.length) { toast("Type a title or a line first.", true); $("#dm-name").focus(); return; }
+    let groupId = group ? group.id : unique(newId(title || "draft"));
     if (!group) writes.push({ op: "set", data: row(groupId, title, dm.parentId, nextOrderOf(siblingsOf(idx, dm.parentId))) });
     else if ((group.title || "") !== title) writes.push({ op: "update", id: group.id, if_version: group.version, data: { title, updated_at: stamp } });
     const stack = [groupId];   // stack[d] = the parent of a line at depth d
@@ -2072,7 +2208,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       card.addEventListener("dragend", () => { state.dragId = null; card.classList.remove("dragging"); document.querySelectorAll(".lane.over").forEach(l => l.classList.remove("over")); });
     }
     // the header: title, then the controls (a draft's pencil, a to-do's up, down and add)
-    const top = el("div", { class: "card-top" }, el("div", { class: "card-title", text: it.title || "Untitled" }), el("span", { class: `lane-tag ${lane.key}`, text: lane.label }));
+    const top = el("div", { class: "card-top" }, el("div", { class: "card-title" + (it.title ? "" : " untitled"), text: it.title || (isDraft ? "Untitled draft" : "Untitled") }), el("span", { class: `lane-tag ${lane.key}`, text: lane.label }));
     if (compact) top.append(el("span", { class: "when", text: lines.length ? `${done} of ${lines.length}` : compactMeta(it, st) }));
     else if (!state.readOnly) {
       top.append(isDraft
@@ -2303,7 +2439,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       state.items = t.todos.map(x => ({ ...x }));
       state.loaded = true;
       const project = currentProject();
-      $("#brand-sub").textContent = project ? project.name : "Projects";
+      $("#brand-sub").textContent = project ? project.name : "";   // the page links already say Projects
       document.title = project ? `${project.name} · ProjectTodo` : "ProjectTodo";
       if (state.project && !project) banner("There is no project with this id. Go back to the projects page.");
       render();
