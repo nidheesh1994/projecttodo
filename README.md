@@ -50,7 +50,9 @@ to-dos you see.
 
 Needs Node 18 or newer. `./start.sh --help` lists the flags; each one sets the
 environment variable of the same meaning, so `node server.mjs` with the variables set
-does the same:
+does the same. `./start.sh --dev` restarts the server whenever `server.mjs` or anything
+under `public/` changes, and every open page reloads itself, so editing needs no
+restarts by hand:
 
 | Variable | Default | What |
 |---|---|---|
@@ -59,6 +61,7 @@ does the same:
 | `PROJECTTODO_DATA_DIR` | `./data` | where `todos.json` lives (commit it to your own repo if you like) |
 | `PROJECTTODO_DOCS_DIR` | the data dir's parent | a to-do's `doc` is a markdown file under this folder, shown in a drawer |
 | `PROJECTTODO_DEFAULT_PROJECT` | `My project` | the project made for rows from before projects existed |
+| `PROJECTTODO_DEV` | unset | `1` watches the files and restarts (the `--dev` flag) |
 
 ## Connect your assistant (MCP)
 

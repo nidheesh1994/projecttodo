@@ -24,6 +24,7 @@ const STATUSES = new Set(["draft", "todo", "doing", "done", "deferred"]);
 const OWNERS = new Set(["user", "assistant", "both"]);
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
+const BOOT = Date.now().toString(36);   // changes on every start: pages reload when they see a new one
 let store = { revision: 0, projects: [], todos: [] };
 let chain = Promise.resolve();
 const clients = new Set();
@@ -70,7 +71,7 @@ async function persist() {
 async function commit() {
   store.revision += 1;
   await persist();
-  const payload = `event: change\ndata: ${JSON.stringify({ revision: store.revision })}\n\n`;
+  const payload = `event: change\ndata: ${JSON.stringify({ revision: store.revision, boot: BOOT })}\n\n`;
   for (const client of clients) client.write(payload);
 }
 
@@ -434,7 +435,7 @@ const server = http.createServer(async (req, res) => {
     if (pathname === "/api/doc" && req.method === "GET") return send(res, 200, await readDoc(url.searchParams.get("path")));
     if (pathname === "/api/events" && req.method === "GET") {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" });
-      res.write(`event: change\ndata: ${JSON.stringify({ revision: store.revision })}\n\n`);
+      res.write(`retry: 1000\nevent: change\ndata: ${JSON.stringify({ revision: store.revision, boot: BOOT })}\n\n`);
       clients.add(res);
       const beat = setInterval(() => res.write(": keep-alive\n\n"), 25000);
       req.on("close", () => { clearInterval(beat); clients.delete(res); });
