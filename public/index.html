@@ -37,6 +37,7 @@ is the end of the last finished to-do under it.
 /* One sheet, like a note: the title on top, the lines under it, no boxes. */
 .dm-sheet { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 12px; max-height: 60vh; overflow: auto; cursor: text; }
 .dm-title { display: block; width: 100%; font: 600 19px/1.3 var(--font-ui); color: var(--fg); background: transparent; border: 0; outline: none; padding: 0 0 8px; margin: 0; }
+.dm-title:focus, .dm-title:focus-visible { outline: none; box-shadow: none; }
 .dm-title::placeholder { color: var(--muted); }
 .dm-list { margin: 0; padding: 0; }
 .dm-list .note-line { padding: 3px 0; gap: 10px; border-radius: 0; }
