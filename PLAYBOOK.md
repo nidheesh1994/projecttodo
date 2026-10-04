@@ -25,7 +25,7 @@ assistants, put one line in their instructions: *before working on the to-do boa
 - **Order**: siblings are sorted by `order` (10, 20, 30); `next_id` names the sibling
   that follows, which the timeline draws as an arrow.
 - **doc**: the path of a markdown file with the detailed plan, relative to the
-  project's docs folder. The page shows it in a drawer. `read_doc` and `write_doc` read
+  project's docs folder; **docs** lists further files, as many as needed. The page shows it in a drawer. `read_doc` and `write_doc` read
   and write it; give them `project_id`, since a project can have folders of its own
   (`list_projects` shows them under `paths`: where its rows file is, where its
   documents are read from, where new ones are written).

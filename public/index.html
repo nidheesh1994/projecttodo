@@ -42,6 +42,7 @@ is the end of the last finished to-do under it.
 .dm-title:focus, .dm-title:focus-visible { outline: none; box-shadow: none; }
 .dm-title::placeholder { color: var(--muted); }
 .dm-list { margin: 0; padding: 0; }
+.dm-list:focus, .dm-list:focus-visible { outline: none; box-shadow: none; }
 .dm-list .note-line { padding: 3px 0; gap: 10px; border-radius: 0; }
 .dm-list .note-line:focus-within { background: transparent; }
 .dm-list .note-text { font-size: 15px; line-height: 1.5; min-height: 22px; }
@@ -706,7 +707,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
         <option value="both">Both</option>
       </select></label>
       <label class="f">Estimate (2 d or 3 h)<input id="ed-est" name="estimate_days" type="text" inputmode="decimal" placeholder="2 d, 3 h" autocomplete="off"></label>
-      <label class="f full">Doc (repo-relative path)<input id="ed-doc" name="doc" type="text" placeholder="docs/marketplace-todo.md" maxlength="300"></label>
+      <label class="f full">Docs (paths in the project's docs folder, one per line; the first is the plan)<textarea id="ed-doc" name="doc" rows="2" placeholder="plans/export-button.md" spellcheck="false"></textarea></label>
       <label class="f">Estimated start<input id="ed-ps" name="planned_start" type="date"></label>
       <label class="f">Estimated end<input id="ed-pe" name="planned_end" type="date"></label>
       <label class="f">Actual start<span class="dt"><input id="ed-as" name="actual_start" type="date"><input id="ed-ast" name="actual_start_time" type="time" aria-label="Actual start time"></span></label>
@@ -1072,9 +1073,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
     return el("div", { class: "fact" }, el("span", { class: "fact-k", text: name }), value);
   }
   // The Doc row: the path opens the file in the drawer.
-  function docLine(path) {
+  function docLine(path, label = "Doc") {
     return el("div", { class: "fact" },
-      el("span", { class: "fact-k", text: "Doc" }),
+      el("span", { class: "fact-k", text: label }),
       el("a", { class: "fact-v doc-v", href: "#", text: path, title: `Open ${path}`, onclick: e => { e.preventDefault(); e.stopPropagation(); openDrawer(path); } }));
   }
   // A card folds to one row. Each card can be set on its own; a lane's arrow sets every card in it.
@@ -1726,7 +1727,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const doc = $("#dv-doc");
     doc.replaceChildren();
     if (it.doc) doc.append(docLine(String(it.doc)));
-    doc.hidden = !it.doc;
+    if (Array.isArray(it.docs)) it.docs.forEach((p, i) => doc.append(docLine(String(p), `Doc ${i + (it.doc ? 2 : 1)}`)));
+    doc.hidden = !it.doc && !(Array.isArray(it.docs) && it.docs.length);
     const kidsBox = $("#dv-kids");
     kidsBox.replaceChildren();
     const under = idx.rows.filter(r => r.anc.includes(it.id));
@@ -1768,7 +1770,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     F.status.value = statusOf(v);
     F.owner.value = v.owner && OWNER_LABEL[v.owner] ? v.owner : "";
     F.est.value = estOf(v) === null ? "" : (estOf(v) < 1 ? `${Math.round(estOf(v) * HOURS_A_DAY * 10) / 10} h` : `${estOf(v)} d`);
-    F.doc.value = v.doc || "";
+    F.doc.value = [v.doc, ...(Array.isArray(v.docs) ? v.docs : [])].filter(Boolean).join("\n");
     F.ps.value = parseDay(v.planned_start) === null ? "" : v.planned_start;
     F.pe.value = parseDay(v.planned_end) === null ? "" : v.planned_end;
     F.as.value = parseDay(v.actual_start) === null ? "" : v.actual_start;
@@ -1824,7 +1826,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       next_id: F.next.value || null,
       status: STATUS_SET.has(F.status.value) ? F.status.value : "todo",
       owner: OWNER_LABEL[F.owner.value] ? F.owner.value : null,
-      doc: F.doc.value.trim() || null,
+      ...(() => { const paths = [...new Set(F.doc.value.split("\n").map(p => p.trim()).filter(Boolean))]; return { doc: paths[0] || null, docs: paths.length > 1 ? paths.slice(1) : null }; })(),
       estimate_days: estN === null ? null : (Number.isNaN(estN) ? NaN : (!Number.isFinite(estN) || estN <= 0 ? null : Math.round(estN * 1000) / 1000)),
       planned_start: dateOr(F.ps.value), planned_end: dateOr(F.pe.value), actual_start: dateOr(F.as.value), actual_done: dateOr(F.ad.value),
       actual_start_time: timeOr(F.as.value, F.ast.value), actual_done_time: timeOr(F.ad.value, F.adt.value),
@@ -2042,7 +2044,11 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function subtreeEnd(i) { let j = i + 1; while (j < dm.lines.length && dm.lines[j].depth > dm.lines[i].depth) j++; return j; }
   function draftLineKey(e) {
     const p = padSelection();
-    if (!p) return;
+    if (!p) {
+      // the caret is not inside a line (an empty pad): nothing may be deleted natively, and the key goes to the first line
+      if (e.key === "Backspace" || e.key === "Delete") { e.preventDefault(); if (!dm.lines.length) dm.lines.push(dmLine()); renderDraftLines(); }
+      return;
+    }
     const i = p.si, line = dm.lines[i], body = lineBodies()[i];
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); syncLines(); $("#dm-form").requestSubmit(); return; }
     if (e.key === "Enter") {
@@ -2061,6 +2067,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
     }
     if (e.key === "Tab") { e.preventDefault(); shiftLine(i, e.shiftKey ? -1 : 1, body); return; }
     if (p.multi && (e.key === "Backspace" || e.key === "Delete")) { e.preventDefault(); replaceAcross(p, ""); return; }
+    // at the very start of the first line, or the very end of the last, there is nothing to join: the browser must not eat the circle or the line itself
+    if (e.key === "Backspace" && p.so === 0 && p.eo === 0 && i === 0) { e.preventDefault(); return; }
+    if (e.key === "Delete" && p.so === p.eo && p.so >= line.text.length && i + 1 >= dm.lines.length) { e.preventDefault(); return; }
     if (e.key === "Backspace" && p.so === 0 && p.eo === 0 && i > 0) {
       // at the start of a line: it joins the line above
       e.preventDefault();
@@ -2092,7 +2101,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
   }
   $("#dm-list").setAttribute("contenteditable", "plaintext-only");
   $("#dm-list").addEventListener("keydown", draftLineKey);
-  $("#dm-list").addEventListener("input", () => syncLines());
+  // after a native edit the lines are read back; if the browser ever removed or added a block, the list is drawn again from the model
+  $("#dm-list").addEventListener("input", () => { if (lineBodies().length !== dm.lines.length) { if (!dm.lines.length) dm.lines.push(dmLine()); renderDraftLines(); } else syncLines(); });
   // a selection over several lines, replaced by typing or a cut, is handled here so the circles and buttons stay whole
   $("#dm-list").addEventListener("beforeinput", e => {
     const p = padSelection();
@@ -2239,6 +2249,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (estParts.length) facts.append(factRow("Est", estParts));
     if (actualParts.length) facts.append(factRow("Actual", actualParts));
     if (it.doc) facts.append(docLine(String(it.doc)));
+    if (Array.isArray(it.docs)) it.docs.forEach((p, i) => facts.append(docLine(String(p), `Doc ${i + (it.doc ? 2 : 1)}`)));
     if (facts.childNodes.length) card.append(facts);
     // everything under it, as a list
     if (lines.length) {

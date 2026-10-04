@@ -176,7 +176,7 @@ A to-do:
 ```
 id, project_id, title, notes, parent_id (null = main to-do), next_id (the sibling after it),
 order (10, 20, …), status: draft | todo (Next) | doing (Current) | done | deferred (Later),
-owner: user | assistant | both | null, doc, estimate_days,
+owner: user | assistant | both | null, doc (the plan), docs (further files, a list), estimate_days,
 planned_start, planned_end (estimated start and end), actual_start, actual_done (actual start and end),
 actual_start_time, actual_done_time (HH:MM, local; stamped by the server with the dates),
 created_at, updated_at (ISO 8601), version (kept by the server)

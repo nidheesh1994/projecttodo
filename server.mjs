@@ -191,6 +191,11 @@ function cleanTodo(data, { creating } = {}) {
   if ("owner" in row && row.owner !== null && !OWNERS.has(row.owner)) throw new HttpError(400, "invalid_argument", "The owner must be user, assistant, both or null.");
   for (const key of ["planned_start", "planned_end", "actual_start", "actual_done"]) if (key in row && !isDay(row[key])) throw new HttpError(400, "invalid_argument", `${key} must be a date as YYYY-MM-DD, or null.`);
   for (const key of ["actual_start_time", "actual_done_time"]) if (key in row && !isTime(row[key])) throw new HttpError(400, "invalid_argument", `${key} must be a time of day as HH:MM (24-hour), or null.`);
+  if ("docs" in row && row.docs !== null) {
+    if (!Array.isArray(row.docs) || row.docs.some(d => typeof d !== "string")) throw new HttpError(400, "invalid_argument", "docs is a list of paths, or null.");
+    row.docs = [...new Set(row.docs.map(d => d.trim()).filter(Boolean))];
+    if (!row.docs.length) row.docs = null;
+  }
   return row;
 }
 
@@ -202,6 +207,7 @@ function plan(write) {
     const existing = findTodo(row.id);
     if (existing && write.if_version === undefined) throw new HttpError(409, "already_exists", `A to-do with id ${row.id} already exists.`, { version: existing.version });
     if (existing && Number(write.if_version) !== existing.version) throw new HttpError(409, "version_mismatch", "This to-do was changed meanwhile; it was reloaded.", { version: existing.version });
+    if (Array.isArray(row.docs) && row.doc) { row.docs = row.docs.filter(d => d !== row.doc); if (!row.docs.length) row.docs = null; }
     return () => {
       const next = { ...row, ...stampTimes(existing, row), version: existing ? existing.version + 1 : 1 };
       if (existing) store.todos[store.todos.indexOf(existing)] = next;
@@ -218,6 +224,8 @@ function plan(write) {
     if (op === "delete") return () => { store.todos.splice(store.todos.indexOf(existing), 1); for (const p of store.projects) if (p.current_id === id) p.current_id = null; return { id, deleted: true }; };
     const patch = cleanTodo(write.data);
     const nextTitle = "title" in patch ? patch.title : existing.title, nextStatus = "status" in patch ? patch.status : existing.status;
+    const nextDoc = "doc" in patch ? patch.doc : existing.doc, nextDocs = "docs" in patch ? patch.docs : existing.docs;
+    if (Array.isArray(nextDocs) && nextDoc && nextDocs.includes(nextDoc)) patch.docs = nextDocs.filter(d => d !== nextDoc).length ? nextDocs.filter(d => d !== nextDoc) : null;
     if (nextStatus !== "draft" && !String(nextTitle || "").trim()) throw new HttpError(400, "invalid_argument", "A to-do needs a title before it leaves Drafts.");
     return () => {
       const next = { ...existing, ...stampTimes(existing, patch), version: existing.version + 1 };
@@ -398,7 +406,7 @@ async function writeDoc(relative, content, mode = "create", projectId) {
 const TODO_FIELDS = {
   title: { type: "string" }, notes: { type: "string" }, parent_id: { type: ["string", "null"], description: "The parent to-do; null for a main to-do." },
   next_id: { type: ["string", "null"], description: "The sibling that comes after this one." }, status: { type: "string", enum: [...STATUSES] },
-  owner: { type: ["string", "null"], enum: [...OWNERS, null] }, doc: { type: ["string", "null"], description: "A markdown file, relative to the docs folder." },
+  owner: { type: ["string", "null"], enum: [...OWNERS, null] }, doc: { type: ["string", "null"], description: "The plan document: a markdown file, relative to the project's docs folder." }, docs: { type: ["array", "null"], items: { type: "string" }, description: "Further documents, as many as needed: paths relative to the project's docs folder." },
   estimate_days: { type: ["number", "null"], description: "Size in days; fractions are hours at 8 hours a day (0.375 = 3 h)." }, planned_start: { type: ["string", "null"], description: "Estimated start, YYYY-MM-DD." }, planned_end: { type: ["string", "null"], description: "Estimated end, YYYY-MM-DD." },
   actual_start: { type: ["string", "null"], description: "YYYY-MM-DD. Setting it to today without a time stamps the time now." }, actual_start_time: { type: ["string", "null"], description: "HH:MM, 24-hour local time; filled by the server when a status change stamps the date." },
   actual_done: { type: ["string", "null"], description: "Actual end, YYYY-MM-DD." }, actual_done_time: { type: ["string", "null"], description: "HH:MM, 24-hour local time." }, order: { type: "number", description: "Position among siblings; 10, 20, 30 …" },
