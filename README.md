@@ -5,7 +5,7 @@ page, a JSON file, no dependencies, and an MCP server so the assistant you alrea
 (Claude Code, Claude Desktop, or anything that speaks MCP) can read and update the same
 to-dos you see.
 
-![The board: Drafts, Now and Next, with Done and Later off to the right](docs/screenshots/board.jpg)
+![The board: Drafts, Now and Next, with Done and Later off to the right](docs/screenshots/board.png)
 
 - **Projects** on the first page, each a card. Open one for its board.
 - **Board**: lanes for Drafts, Now, Next, Done and Later. Press **+** on Drafts (or
@@ -31,13 +31,13 @@ to-dos you see.
 
 | Projects | Draft pad |
 |---|---|
-| ![Projects](docs/screenshots/projects.jpg) | ![The draft pad](docs/screenshots/draft.jpg) |
+| ![Projects](docs/screenshots/projects.png) | ![The draft pad](docs/screenshots/draft.png) |
 
-![Timeline](docs/screenshots/timeline.jpg)
+![Timeline](docs/screenshots/timeline.png)
 
 | Paper | Midnight |
 |---|---|
-| ![Paper theme](docs/screenshots/theme-paper.jpg) | ![Midnight theme](docs/screenshots/theme-midnight.jpg) |
+| ![Paper theme](docs/screenshots/theme-paper.png) | ![Midnight theme](docs/screenshots/theme-midnight.png) |
 
 ## Run it
 
@@ -122,6 +122,12 @@ estimate in days (one day if none). Deleting a parent moves its children up one 
 | `GET /api/doc?path=docs/x.md` | | `{path, modified, content}` for a markdown file under the docs folder |
 | `GET /api/events` | | server-sent `change` events |
 | `POST /mcp` | JSON-RPC | the MCP endpoint |
+
+## Screenshots
+
+`docs/screenshots/take.mjs` takes the README screenshots with a headless Google Chrome
+over the DevTools protocol, at twice the pixel density, against a ProjectTodo serving
+sample data: `node docs/screenshots/take.mjs http://localhost:3005`.
 
 ## License
 
