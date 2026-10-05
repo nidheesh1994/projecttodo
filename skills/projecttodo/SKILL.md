@@ -35,7 +35,11 @@ project, with everything under it), `set_current`, `add_draft`, `read_doc` and `
    end time, and leave it in Current until the person has looked at it and says it is
    done or to move on; then set status done with the real `actual_done` and
    `actual_done_time`. Keep working on that one thing until then.
-7. After every change, say what changed in one short list. If a write is refused,
+7. Not every ask is a to-do: a correction, a tweak or a small thing said while work is
+   going on belongs to the to-do in progress (do it, note it there). Make a new to-do
+   only when the ask is a task of its own, a task inside an existing one, or a draft
+   the person added.
+8. After every change, say what changed in one short list. If a write is refused,
    quote the server's message; do not report it as done.
 
 If the tools are missing, the server is not running or the MCP server is not

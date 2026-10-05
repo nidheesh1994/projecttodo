@@ -1670,8 +1670,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
       const planned = spans.filter(sp => sp.est);
       if (planned.length) { bar.planned_start = dayStr(Math.min(...planned.map(sp => sp.est[0]))); bar.planned_end = dayStr(Math.max(...planned.map(sp => sp.est[1]))); }
       extra.push(bar);
-      // with the switch on, every to-do of the module hangs under the bar with its tree (user, 2026-10-05: "we need full")
-      if (showTodos) for (const row of midx.rows) { const r = row.it; if (statusOf(r) === "draft" || row.anc.some(a => statusOf(midx.byId.get(a) || {}) === "draft")) continue; extra.push({ ...r, parent_id: row.depth === 0 ? bar.id : r.parent_id, module: m.id }); }
+      // with the switch on, the module's to-dos come as main to-dos of their own with their trees, laid out by their dates in
+      // the rows under the bar, as on the module's timeline (user, 2026-10-05); drafts stay out
+      if (showTodos) for (const row of midx.rows) { const r = row.it; if (statusOf(r) === "draft" || row.anc.some(a => statusOf(midx.byId.get(a) || {}) === "draft")) continue; extra.push({ ...r, module: m.id, ...(row.depth === 0 ? { moduleBar: bar.id } : {}) }); }
     });
     return buildIndex([...state.items, ...extra]);
   }
@@ -1749,15 +1750,18 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const TOP = AXIS_H + 12;
     const rows = [];   // each: the pixel spans taken on that row
     const roomAt = (r, px, h, self) => { for (let k = r; k < r + h; k++) if (rows[k] && !fits(self ? rows[k].spans.filter(x => x !== self) : rows[k].spans, px)) return false; return true; };
+    const barRow = new Map();   // a module's bar row: the module's to-dos pack into the rows under it
     for (const sp of mainList) {
       const h = size.get(sp.it.id).h;
-      const want = Number.isInteger(sp.it.row) && sp.it.row >= 0 ? sp.it.row : null;
+      const minRow = sp.it.moduleBar ? (barRow.get(sp.it.moduleBar) ?? -1) + 1 : 0;
+      const want = !sp.it.module && Number.isInteger(sp.it.row) && sp.it.row >= 0 ? sp.it.row : null;   // a module's to-do keeps its row on the module's own chart
       let li = want !== null && roomAt(want, sp.px, h) ? want : -1;
-      for (let r = 0; li < 0; r++) if (roomAt(r, sp.px, h)) li = r;
+      for (let r = minRow; li < 0; r++) if (roomAt(r, sp.px, h)) li = r;
       while (rows.length < li + h) rows.push({ spans: [] });
       for (let k = li; k < li + h; k++) rows[k].spans.push(sp.px);
       sp.row = li;
       sp.y = TOP + li * ROW_H;
+      if (sp.it.isModule) barRow.set(sp.it.id, li);
     }
     let y = TOP + rows.length * ROW_H;
     const height = y + FOOT, width = chartRight + PAD;
@@ -1881,7 +1885,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       node.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(it.id); } });
       // A main to-do can be dragged to any row with room for it; the row is kept and nothing else moves. One that has not started
       // can also be dragged along the days (its estimated dates move with it) or stretched at either end. (user, 2026-10-05)
-      if (b.depth === 0 && sp && !state.readOnly && !it.isModule) {
+      if (b.depth === 0 && sp && !state.readOnly && !it.isModule && !it.module) {
         const canMoveDays = sp.kind !== "actual";
         node.classList.add("movable");
         if (canMoveDays) node.append(el("span", { class: "grip left", "aria-hidden": "true" }), el("span", { class: "grip right", "aria-hidden": "true" }));
@@ -1965,16 +1969,15 @@ svg.tl { display: block; font-family: var(--font-ui); }
 
   // ---------- details: what a to-do is, read at a glance (the timeline opens this; the board opens the form) ----------
   function openDetails(id) {
-    // a module's bar opens the module's board; a module's to-do opens the module's timeline (shown here, kept there)
+    // a module's bar opens the module's board; a module's to-do opens its details here, read from the module's rows (edited there)
     if (String(id).startsWith("module:")) { location.href = `/p/${encodeURIComponent(String(id).slice(7))}`; return; }
     const away = (state.moduleItems || []).find(r => r.id === id);
-    if (away) { location.href = `/p/${encodeURIComponent(away.project_id)}/tree`; return; }
-    const idx = index();
+    const idx = away ? buildIndex((state.moduleItems || []).filter(r => r.project_id === away.project_id)) : index();
     const it = idx.byId.get(id);
     if (!it) { toast("That to-do is no longer in the store.", true); return; }
     const st = statusOf(it);
     const lane = LANES.find(l => l.key === st);
-    const project = currentProject();
+    const project = away ? state.projects.find(p => p.id === away.project_id) || null : currentProject();
     const parent = idx.parentOf(it) ? idx.byId.get(idx.parentOf(it)) : null;
     const today = parseDay(todayStr());
     $("#dv-eyebrow").textContent = parent ? `in ${parent.title || "Untitled"}` : "Main to-do";
@@ -2007,8 +2010,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (st === "done" && !it.actual_done) { const last = latestDescendantDone(idx, it); if (last) row("Ended", `${fmtDay(last)} (its last finished to-do)`); }
     const next = it.next_id ? idx.byId.get(it.next_id) : null;
     if (next) row("Next", next.title || "Untitled");
-    const before = state.items.find(x => x.next_id === it.id);
+    const before = [...idx.byId.values()].find(x => x.next_id === it.id);
     if (before) row("After", before.title || "Untitled");
+    if (away && project) row("Module", el("a", { href: `/p/${encodeURIComponent(project.id)}`, text: project.name, title: `Open the module's board to change it` }));
     row("Changed", it.updated_at ? new Date(it.updated_at).toLocaleString() : "");
     $("#dv-notes").textContent = it.notes || "";
     $("#dv-notes").hidden = !it.notes;
@@ -2032,9 +2036,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
       }
     }
     kidsBox.hidden = !under.length;
-    $("#dv-edit").hidden = state.readOnly;
+    $("#dv-edit").hidden = state.readOnly || !!away;
     $("#dv-edit").onclick = () => { closeDetails(); openEditor(it.id); };
-    $("#dv-add").hidden = state.readOnly || st === "draft";
+    $("#dv-add").hidden = state.readOnly || st === "draft" || !!away;
     $("#dv-add").onclick = () => { closeDetails(); openDraftModal({ parentId: it.id }); };
     $("#dv").hidden = false;
     setTimeout(() => $("#dv-close").focus(), 0);
