@@ -16,7 +16,9 @@ project, with everything under it), `set_current`, `add_draft`, `read_doc` and `
    to-do with a document, and the document template.
 2. Start with `list_projects` and `list_todos`, and say what is current, what is next
    and how many drafts wait. A project may have modules (projects inside it, listed under
-   it in `list_projects`): pass the module's id as `project_id` to work in it.
+   it in `list_projects`): pass the module's id as `project_id` to work in it, or call
+   `list_todos` with the project, `module_id` (id or name) and a lane name as `status`
+   (current, next, later, done, draft) to read one lane of one module in one call.
 3. A draft group with one line is usually a title and its explanation, not a parent
    and a child: move the line into the group's notes and delete it, unless it is a
    step that can be finished on its own. Ask when it could be either. A draft with no

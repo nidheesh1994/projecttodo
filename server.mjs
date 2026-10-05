@@ -499,7 +499,7 @@ const MCP_TOOLS = [
   { name: "list_projects", description: "The projects, each with its counts, its current main to-do and its modules (projects inside it, each with its own board, timeline and status; pass a module's id as project_id). Start a session here, then list_todos.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
   { name: "create_project", description: "Make a project, or a module inside one (parent_id: the project's id; a module uses the project's folders unless it sets its own). data_dir: the folder whose todos.json holds its rows; docs_dir: the folder its documents are read from and written to; absolute, ~/…, or relative to the server's data folder; leave them out for the server's defaults.", inputSchema: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, parent_id: { type: ["string", "null"], description: "The project this module belongs to; leave it out for a project." }, data_dir: { type: ["string", "null"] }, docs_dir: { type: ["string", "null"] } }, required: ["name"], additionalProperties: false } },
   { name: "update_project", description: "Change a project or module: its name, description, or (a module) its status: doing (Current), todo (Next), deferred (Later) or done. A module's status is its own; nothing inside it changes.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, description: { type: "string" }, status: { type: "string", enum: ["doing", "todo", "deferred", "done"] } }, required: ["id"], additionalProperties: false } },
-  { name: "list_todos", description: "The to-dos of a project, in tree order (a child follows its parent), each with created_at (when it was added). Statuses: draft (jotted down, to discuss; review one group at a time), todo (next), doing (current), done, deferred (later). A to-do's doc is the path of its plan document (read_doc).", inputSchema: { type: "object", properties: { project_id: { type: "string" }, status: { type: "string", enum: [...STATUSES] } }, required: ["project_id"], additionalProperties: false } },
+  { name: "list_todos", description: "The to-dos of a project or of one of its modules, in tree order (a child follows its parent). One call does it: project_id, module_id (a module of that project, by id or name; leave it out for the project's own to-dos) and status as a lane name: current (doing), next (todo), later (deferred), done or draft. A matching to-do comes with everything under it. A to-do's doc is the path of its plan document (read_doc).", inputSchema: { type: "object", properties: { project_id: { type: "string" }, module_id: { type: "string", description: "A module of the project, by id or name." }, status: { type: "string", enum: ["current", "next", "later", "done", "draft", "doing", "todo", "deferred"], description: "A lane, by its name or key." } }, required: ["project_id"], additionalProperties: false } },
   { name: "get_todo", description: "One to-do with every field.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false } },
   { name: "create_todo", description: "Add a to-do to a project. Without a parent it is a main to-do.", inputSchema: { type: "object", properties: { project_id: { type: "string" }, ...TODO_FIELDS }, required: ["project_id", "title"], additionalProperties: false } },
   { name: "update_todo", description: "Change fields of a to-do. Only the fields given change. After a draft is discussed: status todo (or set_current), owner, estimate_days, planned dates, doc. A to-do cannot be set done while anything under it is open (children_open).", inputSchema: { type: "object", properties: { id: { type: "string" }, ...TODO_FIELDS }, required: ["id"], additionalProperties: false } },
@@ -560,9 +560,24 @@ async function mcpCall(name, args = {}) {
     case "create_project": return await createProject(args);
     case "update_project": { const p = findProject(String(args.id)); if (!p) throw new HttpError(404, "not_found", "There is no project with that id."); const { id, ...fields } = args; if ("status" in fields && !p.parent_id) throw new HttpError(400, "invalid_argument", "Only a module has a status."); return projectView(await updateProject(p.id, fields, p.version)); }
     case "list_todos": {
-      if (!findProject(String(args.project_id))) throw new HttpError(404, "not_found", "There is no project with that id.");
-      const rows = treeOrder(store.todos.filter(row => row.project_id === args.project_id));
-      return (args.status ? rows.filter(row => row.status === args.status) : rows).map(({ notes, version, updated_at, ...rest }) => rest);
+      const project = findProject(String(args.project_id));
+      if (!project) throw new HttpError(404, "not_found", "There is no project with that id.");
+      let target = project;
+      if (args.module_id) {
+        const want = String(args.module_id).trim().toLowerCase();
+        const mods = store.projects.filter(p => p.parent_id === project.id);
+        target = mods.find(p => p.id.toLowerCase() === want || String(p.name).toLowerCase() === want) || null;
+        if (!target) throw new HttpError(404, "not_found", mods.length ? `${project.name} has no module "${args.module_id}"; its modules: ${mods.map(p => `${p.name} (${p.id})`).join(", ")}.` : `${project.name} has no modules.`);
+      }
+      const LANE_WORDS = { current: "doing", doing: "doing", next: "todo", todo: "todo", later: "deferred", deferred: "deferred", done: "done", draft: "draft", drafts: "draft" };
+      const st = args.status ? LANE_WORDS[String(args.status).toLowerCase()] : null;
+      if (args.status && !st) throw new HttpError(400, "invalid_argument", "status is current, next, later, done or draft.");
+      const rows = treeOrder(store.todos.filter(row => row.project_id === target.id));
+      // a matching to-do comes with everything under it
+      const byId = new Map(rows.map(r => [r.id, r]));
+      const keep = st ? new Set(rows.filter(r => r.status === st).map(r => r.id)) : null;
+      const kept = keep ? rows.filter(r => { for (let p = r, n = 0; p && n < 100; p = p.parent_id ? byId.get(p.parent_id) : null, n++) if (keep.has(p.id)) return true; return false; }) : rows;
+      return kept.map(({ notes, version, updated_at, ...rest }) => rest);
     }
     case "get_todo": { const row = findTodo(String(args.id)); if (!row) throw new HttpError(404, "not_found", "There is no to-do with that id."); return row; }
     case "create_todo": {

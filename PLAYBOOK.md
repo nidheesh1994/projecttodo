@@ -13,7 +13,10 @@ assistants, put one line in their instructions: *before working on the to-do boa
   **current** main to-do.
 - A project may have **modules**: projects inside it, each with its own board, timeline,
   lanes, current to-do and documents. `list_projects` lists them under their project;
-  pass a module's id as `project_id` to work in it. A module cannot hold modules.
+  pass a module's id as `project_id` to work in it, or give `list_todos` the project
+  and `module_id` (id or name) with a lane name as `status` (current, next, later,
+  done, draft) to read one lane of one module in a single call. A module cannot hold
+  modules.
   `move_todo` moves a to-do, with everything under it, into a module or back to the
   project. A module has a status of its own (doing, todo, deferred, done; new ones start
   as todo), set with `update_project`; nothing inside it changes with it.
