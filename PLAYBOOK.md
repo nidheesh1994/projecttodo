@@ -40,8 +40,9 @@ assistants, put one line in their instructions: *before working on the to-do boa
 2. **A to-do is done only when everything under it is done.** The server refuses
    anything else (`children_open`). Tick the children first.
 3. **Do not invent sizes or dates.** Propose an estimate with a reason and ask; write
-   what was agreed. A main to-do with no dates is placed after the one before it, so
-   dates can wait until the order is settled.
+   what was agreed. A main to-do with no dates is shown at today on the timeline (a card
+   moved on from Drafts gets the slot after the one before it), so dates can wait
+   until the order is settled.
 4. **One source of truth.** Decisions go into the to-do's document, dated, with who
    decided. The board holds state (status, owner, dates); the document holds the why
    and the how.

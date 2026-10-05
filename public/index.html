@@ -630,7 +630,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       <span><i class="sw deferred"></i>Later</span>
       <span><i class="sw est"></i>Estimate, when the actual differs</span>
       <span><i class="sw today"></i>Today</span>
-      <span>dashed: dates not set yet, placed after the one before</span>
+      <span>dashed: dates not set yet, shown at today</span>
       <span>→ next</span>
     </div>
   </section>
@@ -1509,11 +1509,14 @@ svg.tl { display: block; font-family: var(--font-ui); }
       } else if (estSpan) {
         span = { start: estSpan[0], end: estSpan[1], kind: "planned", open: false };
       } else {
-        const start = prevEnd !== null ? prevEnd + 1 : today;
-        span = { start, end: start + est - 1, kind: "auto", open: false };
+        // No dates yet: shown at today, so that moving another to-do never moves it (user, 2026-10-05). The slot after the
+        // one before it is kept as `queued`: the default dates a card gets when it moves on from Drafts.
+        span = { start: today, end: today + est - 1, kind: "auto", open: false };
       }
       span.est = estSpan;
-      prevEnd = estSpan ? estSpan[1] : span.end;
+      span.estDays = est;
+      span.queued = prevEnd !== null ? prevEnd + 1 : today;
+      prevEnd = estSpan ? estSpan[1] : (span.kind === "auto" ? span.queued + est - 1 : span.end);
       out.push({ it, ...span });
     }
     return out;
@@ -1522,7 +1525,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function defaultDates(idx, it) {
     const mains = orderedKids(idx, null).filter(m => statusOf(m) !== "draft" || m.id === it.id);
     const s = mainSpans(idx, mains, parseDay(todayStr())).find(x => x.it.id === it.id);
-    return s ? { planned_start: dayStr(s.start), planned_end: dayStr(s.end) } : {};
+    return s ? { planned_start: dayStr(s.queued), planned_end: dayStr(s.queued + s.estDays - 1) } : {};
   }
 
   // ---------- zoom: the days and columns grow or shrink; the view keeps its place ----------
@@ -1890,7 +1893,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     if (days.length) dates.append(el("div", { class: "dv-days", text: days.join(" · ") }));
     if (!parent && !it.planned_start && !it.planned_end && !it.actual_start && st !== "draft") {
       const sp = mainSpans(idx, orderedKids(idx, null).filter(m => statusOf(m) !== "draft"), today).find(x => x.it.id === it.id);
-      if (sp) row("Placed", `${fmtDay(dayStr(sp.start))} to ${fmtDay(dayStr(sp.end))}, after the main to-do before it (dates not set)`);
+      if (sp) row("Placed", `at today, ${fmtDay(dayStr(sp.start))} to ${fmtDay(dayStr(sp.end))} (dates not set; drag it on the timeline to set them)`);
     }
     if (st === "done" && !it.actual_done) { const last = latestDescendantDone(idx, it); if (last) row("Ended", `${fmtDay(last)} (its last finished to-do)`); }
     const next = it.next_id ? idx.byId.get(it.next_id) : null;

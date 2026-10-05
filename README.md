@@ -43,8 +43,8 @@ to-dos you see.
   else moves. A main to-do that has not started can also be dragged along the days to move
   its estimated dates, or stretched at either edge to change its estimated start or end;
   its to-dos hang under it, siblings left to right, children below their parent, in as
-  many columns as its days allow. A main to-do with no dates is placed after the one
-  before it. The thin line under a main to-do is its estimate when the actual days
+  many columns as its days allow. A main to-do with no dates is shown at today, dashed,
+  until it gets dates (dragging it sets them), so moving another to-do never moves it. The thin line under a main to-do is its estimate when the actual days
   differ. The project's **current** main to-do is outlined: setting it starts it today;
   when it is done, its end is the end of the last finished to-do under it. So by
   finishing things, every to-do ends up with its real dates.
