@@ -11,8 +11,7 @@ the timeline, each with themes of its own.
 A **layout** is a per-viewer choice like the theme, kept in the browser
 (`projecttodo-layout`) and switched from a menu in the header beside the theme menu. A
 layout changes structure and density; a theme changes colours; any theme works with any
-layout, and each layout names a default theme that is applied when the layout is first
-chosen (the person can still pick another).
+layout, and changing one never changes the other.
 
 | Layout | Board | Timeline | Default theme | Size |
 |---|---|---|---|---|
@@ -50,3 +49,4 @@ whichever the person prefers.
 - 2026-10-04: plan written; the switch and the Compact layout started.
 - 2026-10-04: the layout switch and the Compact layout built (board, chrome, timeline sizes, default theme Slate); README and a screenshot added. The second layout waits for the choice between Focus and Wall.
 - 2026-10-04: Focus and Wall built (the person said "do the different layouts" without choosing, so both): Focus = one column with Current first, details docked on the right, an agenda timeline; Wall = a grid of equal cards with the lane as a tag, a month calendar timeline. Each brings its default theme (Paper, Midnight). Four layouts in the switch. Open: should a layout be a project setting rather than a viewer one?
+- 2026-10-05: changing the layout no longer switches the theme (each layout used to apply its own default theme when picked); the theme the person chose stays. Asked for as a draft on the board.

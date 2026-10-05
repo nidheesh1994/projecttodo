@@ -57,13 +57,12 @@ to-dos you see.
 - **Themes**: Auto (follows the system), Day, Night, Midnight, Forest, Ember, Paper,
   Rose and Slate, from the menu in the header; remembered per browser.
 - **Layouts**, from the menu beside the theme; a layout changes the structure, a theme the
-  colours, and each layout brings a default theme when chosen (the theme can still be
-  changed). **Classic** is the board above. **Compact** (Slate): every lane one unit wide,
-  tighter cards and smaller type, smaller boxes on the timeline. **Focus** (Paper): one
+  colours, and changing one leaves the other as chosen. **Classic** is the board above. **Compact** (pictured in Slate): every lane one unit wide,
+  tighter cards and smaller type, smaller boxes on the timeline. **Focus** (pictured in Paper): one
   column with Current first, a click shows a to-do's details docked on the right instead
   of a modal, and the timeline is an agenda, one row per day with what starts, runs or
   finishes on it, times included; board and agenda end at the bottom of the window and
-  scroll inside themselves, the agenda opening on today. **Wall** (Midnight): a grid of
+  scroll inside themselves, the agenda opening on today. **Wall** (pictured in Midnight): a grid of
   equal cards with the lane as a tag on each, and the timeline is a month calendar, one
   month in view, moved with the arrows or a sideways scroll; here a to-do changes lane
   through its form.
@@ -186,7 +185,8 @@ order (10, 20, …), status: draft | todo (Next) | doing (Current) | done | defe
 owner: user | assistant | both | null, doc (the plan), docs (further files, a list), estimate_days,
 planned_start, planned_end (estimated start and end), actual_start, actual_done (actual start and end),
 actual_start_time, actual_done_time (HH:MM, local; stamped by the server with the dates),
-created_at, updated_at (ISO 8601), version (kept by the server)
+created_at (when it was added; the details view and the editor show it as Created), updated_at (ISO 8601),
+version (kept by the server)
 ```
 
 Estimates are days; under a day they show as hours at 8 hours a day, and the editor takes
