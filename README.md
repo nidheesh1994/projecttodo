@@ -19,9 +19,12 @@ to-dos you see.
   Done; new modules start in Next), whatever is inside it. The projects page lists a
   project's modules with that status, how many main to-dos are done and the current one;
   on the project's board a module is a card of its own in that lane, marked Module, which
-  opens the module's board; drag the card to another lane to change its status; "+ Module" adds one, and a module's pages say "Project › Module". The project's own
+  opens the module's board; drag the card to another lane to change its status; "+ Module" adds one. The header's breadcrumb reads Projects / project / module / Board or
+  Timeline, each part a link, and the Board and Timeline switch sits at the right by the
+  layout picker. The project's own
   timeline shows each module as a bar from its earliest start to its latest end, with a
-  "Show to-dos" switch that hangs the module's main to-dos under it. To move a to-do into
+  "Show all module to-dos" switch that hangs every to-do of every module under its bar,
+  trees included. To move a to-do into
   a module, drop its card on the module's card; to move it back to the project or to
   another module, pick the place in the editor's In field; everything under it moves along.
 - **Board**: lanes for Drafts, Current, Next, Done and Later. Press **+** on Drafts (or
