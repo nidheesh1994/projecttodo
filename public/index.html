@@ -456,6 +456,14 @@ svg.tl { display: block; font-family: var(--font-ui); }
 .gbox.doing { border-color: var(--accent); border-left-width: 4px; color: var(--fg); }
 .gbox.deferred, .gbox.auto { border-style: dashed; }
 .gbox.current { outline: 2px solid var(--today); outline-offset: 2px; }
+/* a not-started main to-do can be dragged along the days or stretched by its edges */
+.gbox.movable { cursor: grab; touch-action: none; }
+.gbox.movable.dragging { cursor: grabbing; opacity: 0.85; z-index: 3; }
+.gbox .grip { position: absolute; top: 0; bottom: 0; width: 10px; cursor: ew-resize; }
+.gbox .grip.left { left: 0; } .gbox .grip.right { right: 0; }
+.gbox .grip::after { content: ""; position: absolute; top: 9px; bottom: 9px; width: 3px; border-radius: 2px; background: var(--line-strong); opacity: 0; left: 3px; }
+.gbox .grip.right::after { left: auto; right: 3px; }
+.gbox.movable:hover .grip::after { opacity: 1; }
 .gbox:hover, .gbox:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .gtitle { font-size: 12.5px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gbox.done .gtitle, .gbox.doing .gtitle { color: var(--fg); }
@@ -1725,8 +1733,51 @@ svg.tl { display: block; font-family: var(--font-ui); }
         class: `gbox ${st}${b.depth === 0 ? " main" : ""}${sp && sp.kind === "auto" ? " auto" : ""}${currentId === it.id ? " current" : ""}`,
         style: `left:${b.x}px;top:${b.y}px;width:${Math.max(36, b.w - GAP)}px;height:${BOX_H}px`, tabindex: "0", role: "button", title: tipText(it, g),
       }, el("div", { class: "gtitle", text: it.title || "Untitled" }), el("div", { class: "gmeta", text: meta }));
-      node.addEventListener("click", () => openDetails(it.id));
+      let dragged = false;
+      node.addEventListener("click", () => { if (dragged) { dragged = false; return; } openDetails(it.id); });
       node.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(it.id); } });
+      // a main to-do that has not started can be dragged along the days (its estimated dates move with it) or stretched at either end
+      if (b.depth === 0 && sp && sp.kind !== "actual" && !state.readOnly) {
+        node.classList.add("movable");
+        node.append(el("span", { class: "grip left", "aria-hidden": "true" }), el("span", { class: "grip right", "aria-hidden": "true" }));
+        const dayAtX = px => { for (let d = min; d <= max; d++) if (px < X.get(d) + (dayW.get(d) || MINDAY)) return d; return max; };
+        node.addEventListener("pointerdown", e => {
+          if (e.button !== 0) return;
+          const mode = e.target.classList.contains("grip") ? (e.target.classList.contains("left") ? "start" : "end") : "move";
+          const rect = graph.getBoundingClientRect();
+          const day0 = dayAtX(e.clientX - rect.left + 0);
+          const from = { start: sp.start, end: sp.end };
+          let delta = 0;
+          node.setPointerCapture(e.pointerId);
+          node.classList.add("dragging");
+          e.preventDefault();
+          const onMove = ev => {
+            const d = dayAtX(ev.clientX - rect.left) - day0;
+            if (d === delta) return;
+            delta = d;
+            const s = mode === "end" ? from.start : from.start + delta, en = mode === "start" ? from.end : from.end + delta;
+            const a = Math.min(s, mode === "start" ? from.end : en), z = Math.max(mode === "end" ? from.start : s, en);
+            node.style.left = `${X.get(Math.max(min, a))}px`;
+            node.style.width = `${Math.max(36, X.get(Math.min(max, z) + 1) - X.get(Math.max(min, a)) - GAP)}px`;
+            node.querySelector(".gmeta").textContent = `est ${fmtDay(dayStr(a))} to ${fmtDay(dayStr(z))}`;
+            dragged = dragged || delta !== 0;
+          };
+          const onUp = async () => {
+            node.removeEventListener("pointermove", onMove);
+            node.removeEventListener("pointerup", onUp);
+            node.removeEventListener("pointercancel", onUp);
+            node.classList.remove("dragging");
+            if (!delta) return;
+            let s = from.start, en = from.end;
+            if (mode === "move") { s += delta; en += delta; } else if (mode === "start") s = Math.min(s + delta, en); else en = Math.max(en + delta, s);
+            const ok = await write("Moving the estimate", () => call("PATCH", `/api/todos/${encodeURIComponent(it.id)}`, { if_version: it.version, data: { planned_start: dayStr(s), planned_end: dayStr(en) } }));
+            if (ok) loadAll();
+          };
+          node.addEventListener("pointermove", onMove);
+          node.addEventListener("pointerup", onUp);
+          node.addEventListener("pointercancel", onUp);
+        });
+      }
       graph.append(node);
     }
     wrap.replaceChildren(graph);

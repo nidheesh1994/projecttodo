@@ -33,6 +33,7 @@ const PUBLIC = path.join(ROOT, "public");
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 3004);
 const STATUSES = new Set(["draft", "todo", "doing", "done", "deferred"]);
+const TODO_KEYS = new Set(["id", "project_id", "title", "notes", "parent_id", "next_id", "order", "status", "owner", "doc", "docs", "estimate_days", "planned_start", "planned_end", "actual_start", "actual_start_time", "actual_done", "actual_done_time", "created_at", "updated_at", "version"]);
 const OWNERS = new Set(["user", "assistant", "both"]);
 const BOARD_ORDER = ["draft", "doing", "todo", "done", "deferred"];
 // A project's board columns: their order and a colour each, as the person set them on the board page.
@@ -177,6 +178,8 @@ function cleanTodo(data, { creating } = {}) {
   if (!data || typeof data !== "object" || Array.isArray(data)) throw new HttpError(400, "invalid_argument", "The data must be an object.");
   const row = { ...data };
   delete row.version;
+  const unknown = Object.keys(row).filter(k => !TODO_KEYS.has(k));
+  if (unknown.length) throw new HttpError(400, "unknown_field", `Unknown field${unknown.length > 1 ? "s" : ""}: ${unknown.join(", ")}. Give the fields themselves (title, status, …), not a wrapper object.`);
   if (creating) {
     const id = String(row.id || "").trim();
     if (!/^[A-Za-z0-9_.:+@~-]{1,120}$/.test(id)) throw new HttpError(400, "invalid_argument", "An id is required: letters, digits, dashes, dots or underscores.");
@@ -260,6 +263,17 @@ async function applyWrites(writes) {
     const results = steps.map((step) => step());
     try {
       checkDone(writes, results);
+      // A child that has started starts its parents: an ancestor without an actual start takes the child's start (user, 2026-10-05).
+      for (const row of results) {
+        if (!row || row.deleted || !row.actual_start) continue;
+        let p = row.parent_id ? findTodo(row.parent_id) : null;
+        const seen = new Set([row.id]);
+        while (p && !seen.has(p.id)) {
+          seen.add(p.id);
+          if (!p.actual_start) { const next = { ...p, actual_start: row.actual_start, actual_start_time: row.actual_start_time || null, updated_at: new Date().toISOString(), version: p.version + 1 }; store.todos[store.todos.indexOf(p)] = next; p = next; }
+          p = p.parent_id ? findTodo(p.parent_id) : null;
+        }
+      }
       // The current to-do is the one in Current: finished or moved to another column, it is no longer the project's current one.
       for (const row of results) if (row && !row.deleted && row.status !== "doing") for (const p of store.projects) if (p.current_id === row.id) { p.current_id = null; p.updated_at = new Date().toISOString(); p.version += 1; }
     } catch (error) {

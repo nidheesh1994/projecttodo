@@ -103,7 +103,8 @@ When a to-do needs a plan (any main to-do; a child when it is big):
 ## While work happens
 
 - Starting a main to-do: `set_current`. Starting a child: `status: doing`; the server
-  stamps `actual_start` and its time. Do it the moment the work starts, not after.
+  stamps `actual_start` and its time, and gives its parents the same start if they had
+  none. Do it the moment the work starts, not after.
 - Finishing a child: `status: done`; the server stamps `actual_done` and its time. Do it
   the moment the work ends. Add a dated line to the
   document's **Progress** section when something notable happened (a decision, a

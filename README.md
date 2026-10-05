@@ -35,7 +35,9 @@ to-dos you see.
   scroll into view.
 - **Timeline**: dates along the top. A main to-do (one without a parent) spans its days,
   and one with a start time begins at that time and ends at its end time or at now, kept
-  at least as wide as its tree needs; rows stack in time order;
+  at least as wide as its tree needs; rows stack in time order. A main to-do that has
+  not started can be dragged along the days to move its estimated dates, or stretched at
+  either edge to change its estimated start or end;
   its to-dos hang under it, siblings left to right, children below their parent, in as
   many columns as its days allow. A main to-do with no dates is placed after the one
   before it. The thin line under a main to-do is its estimate when the actual days
@@ -192,7 +194,8 @@ Estimates are days; under a day they show as hours at 8 hours a day, and the edi
 time of day, on the page and on the server, so a to-do that started at 12:43 and ended at
 15:20 reads "4 Oct 12:43 to 15:20 · 2 h 37 m" on its card and sits by the hour on the
 timeline. A to-do that finishes goes to the top of Done, above the ones finished before it (move it
-afterwards if you like). Dropping a card in Current sets `actual_start` when empty; in Done sets `actual_done` (for a
+afterwards if you like). A child that starts also starts its parents: a parent without an
+actual start takes the child's. Dropping a card in Current sets `actual_start` when empty; in Done sets `actual_done` (for a
 main to-do, the end of its last finished child) and `actual_start` when empty; leaving
 Done clears `actual_done`. A to-do can be set done only when everything under it is done:
 the page checks this on drops, in the editor and on the ticks, and the server refuses such
@@ -211,7 +214,7 @@ estimate in days (one day if none). Deleting a parent moves its children up one 
 | `DELETE /api/projects/{id}` | `{if_version}` | removes it and its to-dos |
 | `GET /api/todos?project={id}` | | `{todos}` |
 | `POST /api/todos` | `{data: {id, project_id, title, …}}` | creates a row (409 if the id exists) |
-| `PATCH /api/todos/{id}` | `{if_version, data: {…}}` | merges fields; 409 `version_mismatch` when the row changed meanwhile, 409 `children_open` when it would be done with open to-dos under it |
+| `PATCH /api/todos/{id}` | `{if_version, data: {…}}` | merges fields; 409 `version_mismatch` when the row changed meanwhile, 409 `children_open` when it would be done with open to-dos under it, 400 `unknown_field` for a field the row does not have |
 | `DELETE /api/todos/{id}` | `{if_version}` | removes a row |
 | `POST /api/batch` | `{writes: [{op: set\|update\|delete, id, data, if_version}]}` | all or nothing |
 | `GET /api/doc?path=docs/x.md` | | `{path, modified, content}` for a markdown file under the docs folder |
