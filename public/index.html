@@ -458,6 +458,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
 .gbox.deferred, .gbox.auto { border-style: dashed; }
 .gbox.current { outline: 2px solid var(--today); outline-offset: 2px; }
 /* a not-started main to-do can be dragged along the days or stretched by its edges */
+.drop-band { position: absolute; left: 8px; right: 8px; box-sizing: border-box; border: 1px dashed var(--accent); border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, transparent); pointer-events: none; z-index: 2; }
+.drop-band.bad { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.gbox.movable.bad { outline: 2px solid var(--danger); outline-offset: 1px; }
 .gbox.movable { cursor: grab; touch-action: none; }
 .gbox.movable.dragging { cursor: grabbing; opacity: 0.85; z-index: 3; }
 .gbox .grip { position: absolute; top: 0; bottom: 0; width: 10px; cursor: ew-resize; }
@@ -998,6 +1001,19 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function renumber(map, list) {
     list.forEach((s, i) => { const o = (i + 1) * 10; if (s.order !== o) addPatch(map, s.id, { order: o }); });
   }
+  // A dropped to-do lands where it was dropped, next links or not: it leaves the chain it was in (the one before it now points
+  // past it), and dropped between two linked siblings it is linked between them; elsewhere it has no next. (user, 2026-10-05)
+  function relink(map, it, sibs) {
+    const i = sibs.indexOf(it);
+    const before = i > 0 ? sibs[i - 1] : null, after = i < sibs.length - 1 ? sibs[i + 1] : null;
+    const oldNext = it.next_id || null;
+    const prev = sibs.find(s => s.id !== it.id && s.next_id === it.id) || null;
+    const wantPrev = before && (before.next_id === it.id || (after && before.next_id === after.id)) ? before : null;
+    const wantNext = after && ((wantPrev && before.next_id === after.id) || oldNext === after.id) ? after : null;
+    if (prev && prev !== wantPrev) addPatch(map, prev.id, { next_id: oldNext === prev.id ? null : oldNext });
+    if (wantPrev && wantPrev.next_id !== it.id) addPatch(map, wantPrev.id, { next_id: it.id });
+    if ((wantNext ? wantNext.id : null) !== oldNext) addPatch(map, it.id, { next_id: wantNext ? wantNext.id : null });
+  }
   // A to-do is done only when everything under it is done: the rule for a drop into Done, the status field and the ticks.
   function refuseDone(idx, it) {
     const open = idx.rows.filter(r => r.anc.includes(it.id) && statusOf(r.it) !== "done");
@@ -1006,11 +1022,12 @@ svg.tl { display: block; font-family: var(--font-ui); }
     toast(open.length === 1 ? `Tick the one open to-do under "${t}" done first.` : `Tick the ${open.length} open to-dos under "${t}" done first.`, true);
     return true;
   }
-  async function dropItem(id, laneKey, beforeId) {
+  async function dropItem(id, laneKey, beforeId, extra) {
     const idx = index();
     const it = idx.byId.get(id);
     if (!it) return;
     const patches = new Map();
+    if (extra) addPatch(patches, it.id, extra);
     const was = statusOf(it);
     if (was !== laneKey) {
       if (laneKey === "done" && refuseDone(idx, it)) return;
@@ -1032,11 +1049,13 @@ svg.tl { display: block; font-family: var(--font-ui); }
         const at = sibs.findIndex(s => s.id === target.id);
         sibs.splice(at < 0 ? sibs.length : at, 0, it);
         renumber(patches, sibs);
+        relink(patches, it, sibs);
       }
     } else if (!target) {
       const sibs = siblingsOf(idx, parent).filter(s => s.id !== it.id);
       sibs.push(it);
       renumber(patches, sibs);
+      relink(patches, it, sibs);
     }
     if (!patches.size) return;
     const currentWasEmpty = !idx.rows.some(r => r.depth === 0 && r.it.id !== it.id && statusOf(r.it) === "doing");
@@ -1609,21 +1628,28 @@ svg.tl { display: block; font-family: var(--font-ui); }
     for (let d = min; d <= max + 1; d++) { X.set(d, x); x += dayW.get(d) || MINDAY; }
     const xAt = t => { const d = Math.floor(t); return (X.has(d) ? X.get(d) : X.get(max + 1)) + (dayW.get(d) || MINDAY) * (t - d); };
     let chartRight = x;
-    // main to-dos whose boxes would overlap go on separate rows of lanes, earliest start first
-    const lanes = [];
-    for (const sp of mainList.slice().sort((a, b) => a.t0 - b.t0 || a.t1 - b.t1)) {
+    // The boxes pack to the top in the board's order, all lanes together: each takes the row it was dropped in (row) when nothing
+    // there is in its way, else the first row with room. Moving one never moves another, except where two would overlap.
+    // (user, 2026-10-05: no split by lane, everything in one area)
+    for (const sp of mainList) {
       const x0 = xAt(sp.t0), w = Math.max(xAt(sp.t1) - x0, size.get(sp.it.id).w * SLOT);
       sp.px = [x0, x0 + w];
       chartRight = Math.max(chartRight, x0 + w);
-      let li = lanes.findIndex(l => l.spans.every(([a, b]) => sp.px[1] + GAP <= a || sp.px[0] >= b + GAP));
-      if (li < 0) { lanes.push({ spans: [], h: 0 }); li = lanes.length - 1; }
-      lanes[li].spans.push(sp.px);
-      lanes[li].h = Math.max(lanes[li].h, size.get(sp.it.id).h);
-      sp.lane = li;
     }
-    const laneY = [];
+    const fits = (list, px) => list.every(([a, b]) => px[1] <= a || px[0] >= b);   // a box ends a gap before its last day ends, so day-adjacent boxes share a row
+    const rows = [];
+    for (const sp of mainList) {
+      const want = Number.isInteger(sp.it.row) && sp.it.row >= 0 ? sp.it.row : null;
+      let li = want !== null && (!rows[want] || fits(rows[want].spans, sp.px)) ? want : rows.findIndex(r => fits(r.spans, sp.px));
+      if (li < 0) li = rows.length;
+      while (rows.length <= li) rows.push({ spans: [], h: 1 });
+      rows[li].spans.push(sp.px);
+      rows[li].h = Math.max(rows[li].h, size.get(sp.it.id).h);
+      sp.row = li;
+    }
     let y = AXIS_H + 12;
-    for (const l of lanes) { laneY.push(y); y += l.h * ROW_H + 14; }
+    for (const r of rows) { r.y = y; y += r.h * ROW_H + 10; }
+    for (const sp of mainList) sp.y = rows[sp.row].y;
     const height = y + FOOT, width = chartRight + PAD;
     const boxes = [];
     const placeTree = (id, x0, w, row, yTop, depth, sp) => {
@@ -1634,10 +1660,13 @@ svg.tl { display: block; font-family: var(--font-ui); }
       let cx = x0;
       for (const k of kids) { const kw = size.get(k.id).w * unit; placeTree(k.id, cx, kw, row + 1, yTop, depth + 1, null); cx += kw; }
     };
-    for (const sp of mainList) placeTree(sp.it.id, sp.px[0], sp.px[1] - sp.px[0], 0, laneY[sp.lane], 0, sp);
+    for (const sp of mainList) placeTree(sp.it.id, sp.px[0], sp.px[1] - sp.px[0], 0, sp.y, 0, sp);
     const boxOf = new Map(boxes.map(b => [b.id, b]));
 
     const graph = el("div", { class: "graph", style: `width:${width}px;height:${height}px` });
+    const band = el("div", { class: "drop-band" });
+    band.hidden = true;
+    graph.append(band);
     const svg = svgEl("svg", { class: "tl graph-edges", width, height, viewBox: `0 0 ${width} ${height}`, "aria-hidden": "true" });
     const defs = svgEl("defs");
     for (const [name, cls] of [["arrow-done", "done"], ["arrow-dull", "dull"]]) {
@@ -1663,7 +1692,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     // the estimate under a main to-do whose actual days differ from it
     for (const sp of mainList) {
       if (!sp.est || sp.kind !== "actual" || (sp.est[0] === sp.start && sp.est[1] === sp.end)) continue;
-      svg.append(svgEl("rect", { class: "est", x: X.get(sp.est[0]), y: laneY[sp.lane] + BOX_H + 2, width: X.get(sp.est[1] + 1) - X.get(sp.est[0]) - GAP, height: 3, rx: 1.5 }));
+      svg.append(svgEl("rect", { class: "est", x: X.get(sp.est[0]), y: sp.y + BOX_H + 2, width: X.get(sp.est[1] + 1) - X.get(sp.est[0]) - GAP, height: 3, rx: 1.5 }));
     }
     // the hours of a main to-do with times of day: a thin bar along the top of its box, from its start time to its end time or now
     const minuteX = (day, minutes) => X.get(day) + (dayW.get(day) || MINDAY) * (minutes / 1440);
@@ -1739,41 +1768,78 @@ svg.tl { display: block; font-family: var(--font-ui); }
       let dragged = false;
       node.addEventListener("click", () => { if (dragged) { dragged = false; return; } openDetails(it.id); });
       node.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(it.id); } });
-      // a main to-do that has not started can be dragged along the days (its estimated dates move with it) or stretched at either end
-      if (b.depth === 0 && sp && sp.kind !== "actual" && !state.readOnly) {
+      // A main to-do can be dragged to any row with room for it; the row is kept and nothing else moves. One that has not started
+      // can also be dragged along the days (its estimated dates move with it) or stretched at either end. (user, 2026-10-05)
+      if (b.depth === 0 && sp && !state.readOnly) {
+        const canMoveDays = sp.kind !== "actual";
         node.classList.add("movable");
-        node.append(el("span", { class: "grip left", "aria-hidden": "true" }), el("span", { class: "grip right", "aria-hidden": "true" }));
+        if (canMoveDays) node.append(el("span", { class: "grip left", "aria-hidden": "true" }), el("span", { class: "grip right", "aria-hidden": "true" }));
         const dayAtX = px => { for (let d = min; d <= max; d++) if (px < X.get(d) + (dayW.get(d) || MINDAY)) return d; return max; };
+        const treeW = size.get(it.id).w * SLOT;
+        const rowH = r => r.h * ROW_H;
+        const others = r => r.spans.filter(x => x !== sp.px);
+        // the row a drop at this y (in the graph) lands in, or a new row under the last; null where it already is
+        const slotAt = (py, px) => {
+          let k = rows.findIndex(r => py < r.y + rowH(r) + 5);
+          if (k < 0) k = rows.length;
+          if (k === sp.row) return null;
+          const last = rows[rows.length - 1];
+          const ok = k >= rows.length || fits(others(rows[k]), px);
+          return { row: k, ok, y: k < rows.length ? rows[k].y : last.y + rowH(last) + 10, h: k < rows.length ? rowH(rows[k]) : ROW_H };
+        };
         node.addEventListener("pointerdown", e => {
           if (e.button !== 0) return;
-          const mode = e.target.classList.contains("grip") ? (e.target.classList.contains("left") ? "start" : "end") : "move";
+          const onGrip = e.target.classList.contains("grip");
+          if (onGrip && !canMoveDays) return;
+          const mode = onGrip ? (e.target.classList.contains("left") ? "start" : "end") : "move";
           const rect = graph.getBoundingClientRect();
-          const day0 = dayAtX(e.clientX - rect.left + 0);
-          const from = { start: sp.start, end: sp.end };
-          let delta = 0;
+          const day0 = dayAtX(e.clientX - rect.left), y0 = e.clientY;
+          const meta = node.querySelector(".gmeta");
+          const from = { start: sp.start, end: sp.end, left: node.style.left, width: node.style.width, meta: meta.textContent };
+          let delta = 0, slot = null, px = sp.px, room = true;
           node.setPointerCapture(e.pointerId);
           node.classList.add("dragging");
           e.preventDefault();
           const onMove = ev => {
-            const d = dayAtX(ev.clientX - rect.left) - day0;
-            if (d === delta) return;
-            delta = d;
-            const s = mode === "end" ? from.start : from.start + delta, en = mode === "start" ? from.end : from.end + delta;
-            const a = Math.min(s, mode === "start" ? from.end : en), z = Math.max(mode === "end" ? from.start : s, en);
-            node.style.left = `${X.get(Math.max(min, a))}px`;
-            node.style.width = `${Math.max(36, X.get(Math.min(max, z) + 1) - X.get(Math.max(min, a)) - GAP)}px`;
-            node.querySelector(".gmeta").textContent = `est ${fmtDay(dayStr(a))} to ${fmtDay(dayStr(z))}`;
-            dragged = dragged || delta !== 0;
+            if (canMoveDays) {
+              const d = dayAtX(ev.clientX - rect.left) - day0;
+              if (d !== delta) {
+                delta = d;
+                const s = mode === "end" ? from.start : from.start + delta, en = mode === "start" ? from.end : from.end + delta;
+                const a = Math.min(s, mode === "start" ? from.end : en), z = Math.max(mode === "end" ? from.start : s, en);
+                const x0 = X.get(Math.max(min, a)), x1 = X.get(Math.min(max, z) + 1);
+                node.style.left = `${x0}px`;
+                node.style.width = `${Math.max(36, x1 - x0 - GAP)}px`;
+                meta.textContent = `est ${fmtDay(dayStr(a))} to ${fmtDay(dayStr(z))}`;
+                px = delta ? [x0, Math.max(x1, x0 + treeW)] : sp.px;
+                dragged = dragged || delta !== 0;
+              }
+            }
+            if (mode === "move") {
+              const dy = ev.clientY - y0;
+              node.style.transform = `translateY(${dy}px)`;
+              slot = Math.abs(dy) > 6 ? slotAt(ev.clientY - rect.top, px) : null;
+              dragged = dragged || Math.abs(dy) > 3;
+            }
+            room = slot ? slot.ok : fits(others(rows[sp.row]), px);
+            band.hidden = !slot;
+            if (slot) { band.style.top = `${slot.y}px`; band.style.height = `${slot.h}px`; band.classList.toggle("bad", !slot.ok); }
+            node.classList.toggle("bad", !room);
           };
           const onUp = async () => {
             node.removeEventListener("pointermove", onMove);
             node.removeEventListener("pointerup", onUp);
             node.removeEventListener("pointercancel", onUp);
-            node.classList.remove("dragging");
-            if (!delta) return;
+            node.classList.remove("dragging", "bad");
+            node.style.transform = ""; node.style.left = from.left; node.style.width = from.width; meta.textContent = from.meta;
+            band.hidden = true;
+            if (!slot && !delta) return;
+            if (!room) { toast("Something is in the way there.", true); return; }
             let s = from.start, en = from.end;
             if (mode === "move") { s += delta; en += delta; } else if (mode === "start") s = Math.min(s + delta, en); else en = Math.max(en + delta, s);
-            const ok = await write("Moving the estimate", () => call("PATCH", `/api/todos/${encodeURIComponent(it.id)}`, { if_version: it.version, data: { planned_start: dayStr(s), planned_end: dayStr(en) } }));
+            const dates = delta && canMoveDays ? { planned_start: dayStr(s), planned_end: dayStr(en) } : {};
+            const patch = slot ? { row: slot.row, ...dates } : dates;
+            const ok = await write(slot ? "Moving the to-do" : "Moving the estimate", () => call("PATCH", `/api/todos/${encodeURIComponent(it.id)}`, { if_version: it.version, data: patch }));
             if (ok) loadAll();
           };
           node.addEventListener("pointermove", onMove);

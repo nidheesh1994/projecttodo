@@ -47,6 +47,13 @@ assistants, put one line in their instructions: *before working on the to-do boa
    and the how.
 5. **Small writes.** Change the fields that changed. Read before you write when the
    row may have moved since you last saw it.
+6. **A line is either a step or an instruction; decide which.** A step is work that can
+   be finished and ticked on its own ("Add a left arrow to the calendar"): it becomes a
+   to-do, with a title that names it. An instruction says how the parent should behave,
+   what it must not do, or why ("the other items must not move", "keep the selected
+   theme"): it is not a to-do of its own; it goes into the parent's `notes` or its plan
+   document, in the person's words, so nothing is lost. Ask when a line could be
+   either. Titles stay short because the how lives in the notes, not by a word count.
 
 ## Session start
 
@@ -77,8 +84,9 @@ Take **one draft group at a time**, in board order.
    - set `owner`, `estimate_days`, `planned_start` and `planned_end` (or leave the
      dates empty to place it after the previous main to-do);
    - move the group to `todo`, or `doing` through `set_current` if it starts now;
-   - give each child `status: todo`, an `owner`, an `estimate_days`, and chain the
-     order with `next_id`; children that wait go to `deferred`.
+   - give each child a title that names its step (rule 6), `status: todo`, an
+     `owner`, an `estimate_days`, and chain the order with `next_id`; children that
+     wait go to `deferred`.
 4. Lines the person wants dropped: ask once, then `delete_todo`.
 5. Say what you changed, in one short list.
 
@@ -97,6 +105,8 @@ When a to-do needs a plan (any main to-do; a child when it is big):
 1. `get_todo` for the fields, `read_doc` if it already has a document.
 2. Write or update the document. Keep the Plan section as a checklist that mirrors the
    child to-dos, one line each, so the board and the document say the same thing.
+   Instructions for the work (how it should behave, rules, reasons) are written here or
+   in `notes`, not as children.
 3. Record every decision under **Decisions** with the date and who decided.
 4. Set the fields on the board to match (estimate, dates, owner, doc).
 

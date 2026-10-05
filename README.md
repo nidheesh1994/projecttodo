@@ -35,9 +35,11 @@ to-dos you see.
   scroll into view.
 - **Timeline**: dates along the top. A main to-do (one without a parent) spans its days,
   and one with a start time begins at that time and ends at its end time or at now, kept
-  at least as wide as its tree needs; rows stack in time order. A main to-do that has
-  not started can be dragged along the days to move its estimated dates, or stretched at
-  either edge to change its estimated start or end;
+  at least as wide as its tree needs. The boxes pack to the top in the board's order, all
+  lanes together, each in the first row with room for it. Drag a box to any row where nothing
+  is in its way (a band shows the row, red where there is no room) and it stays there; nothing
+  else moves. A main to-do that has not started can also be dragged along the days to move
+  its estimated dates, or stretched at either edge to change its estimated start or end;
   its to-dos hang under it, siblings left to right, children below their parent, in as
   many columns as its days allow. A main to-do with no dates is placed after the one
   before it. The thin line under a main to-do is its estimate when the actual days
@@ -143,7 +145,8 @@ as commands): `review_drafts`, `submit_draft`, `plan_todo`, `daily_review`.
 Connecting the server tells an assistant what the tools are, not how you want the board
 worked. That lives in one file, [PLAYBOOK.md](PLAYBOOK.md): the lanes, the rules (drafts
 belong to the person; a to-do is done only when everything under it is done; no invented
-estimates), how to review draft groups one at a time, how to plan a to-do with a
+estimates; a draft line is a to-do when it is a step of its own and goes into the notes or
+the document when it is an instruction for the parent), how to review draft groups one at a time, how to plan a to-do with a
 document, and the document template. The server sends a summary when a client connects,
 and the `get_playbook` tool returns the whole file, so every MCP client can read it.
 
@@ -181,7 +184,8 @@ A to-do:
 
 ```
 id, project_id, title, notes, parent_id (null = main to-do), next_id (the sibling after it),
-order (10, 20, …), status: draft | todo (Next) | doing (Current) | done | deferred (Later),
+order (10, 20, …), row (the timeline row a main to-do was dropped in; null = the first row
+with room), status: draft | todo (Next) | doing (Current) | done | deferred (Later),
 owner: user | assistant | both | null, doc (the plan), docs (further files, a list), estimate_days,
 planned_start, planned_end (estimated start and end), actual_start, actual_done (actual start and end),
 actual_start_time, actual_done_time (HH:MM, local; stamped by the server with the dates),
@@ -195,7 +199,9 @@ time of day, on the page and on the server, so a to-do that started at 12:43 and
 15:20 reads "4 Oct 12:43 to 15:20 · 2 h 37 m" on its card and sits by the hour on the
 timeline. A to-do that finishes goes to the top of Done, above the ones finished before it (move it
 afterwards if you like). A child that starts also starts its parents: a parent without an
-actual start takes the child's. Dropping a card in Current sets `actual_start` when empty; in Done sets `actual_done` (for a
+actual start takes the child's. A dropped to-do lands where it was dropped, next links or not:
+it leaves the chain it was in, and dropped between two linked to-dos it is linked between
+them. Dropping a card in Current sets `actual_start` when empty; in Done sets `actual_done` (for a
 main to-do, the end of its last finished child) and `actual_start` when empty; leaving
 Done clears `actual_done`. A to-do can be set done only when everything under it is done:
 the page checks this on drops, in the editor and on the ticks, and the server refuses such

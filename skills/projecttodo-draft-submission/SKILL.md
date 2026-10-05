@@ -23,9 +23,13 @@ apply ("owner me", "after the marketplace work", "no document").
    - a group with **no title**: a loose list; group the lines into one or more to-dos,
      propose a title for each, and wait for the answer before writing anything;
    - lines that are questions or notes: into `notes`, not children;
+   - a line that is an instruction for the parent (how it should behave, a rule, a
+     reason) rather than work of its own: into the group's `notes` or the document, in
+     the person's words, not a child; ask when it could be either;
    - a truncated or unclear title: tidy it, and say so;
-   - lines that are steps: children with `status: todo`, an owner, an estimate, chained
-     with `next_id` in the order given.
+   - lines that are steps (work that can be finished on its own): children with a title
+     that names the step, `status: todo`, an owner, an estimate, chained with `next_id`
+     in the order given.
 4. Decide whether the group needs a plan document, by the playbook's rule: write one
    when the group has three or more steps, when its estimate is half a day or more,
    when a decision has to be recorded, or when the person asked for one; skip it for a
