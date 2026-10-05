@@ -23,9 +23,12 @@ const DOC_WRITE_DIR = path.resolve(DOCS_DIR, process.env.PROJECTTODO_DOC_WRITE_D
 // A project may keep its rows in its own folder (<data_dir>/todos.json) and read and write its documents in its own
 // docs folder. Paths are absolute, ~/…, or relative to the server's data folder; empty means the server's defaults.
 const resolveDir = p => { p = String(p).trim(); if (p === "~" || p.startsWith("~/")) p = path.join(os.homedir(), p.slice(1)); return path.isAbsolute(p) ? path.normalize(p) : path.resolve(DATA_DIR, p); };
-const dataDirOf = project => (project && project.data_dir ? resolveDir(project.data_dir) : null);   // null: the rows live in the main file
-const docsDirOf = project => (project && project.docs_dir ? resolveDir(project.docs_dir) : DOCS_DIR);
-const writeDirOf = project => (project && project.docs_dir ? resolveDir(project.docs_dir) : DOC_WRITE_DIR);
+// A module (a project with a parent_id) uses its parent's folders unless it sets its own.
+const parentOf = project => (project && project.parent_id ? store.projects.find(p => p.id === project.parent_id) || null : null);
+const ownDir = (project, key) => (project && project[key] ? project[key] : ((parentOf(project) || {})[key] || null));
+const dataDirOf = project => { const d = ownDir(project, "data_dir"); return d ? resolveDir(d) : null; };   // null: the rows live in the main file
+const docsDirOf = project => { const d = ownDir(project, "docs_dir"); return d ? resolveDir(d) : DOCS_DIR; };
+const writeDirOf = project => { const d = ownDir(project, "docs_dir"); return d ? resolveDir(d) : DOC_WRITE_DIR; };
 const cleanDir = v => { if (v === null || v === undefined) return null; const s = String(v).trim(); if (!s) return null; if (s.includes("\0") || s.length > 500) throw new HttpError(400, "invalid_argument", "A folder path is a plain path of at most 500 characters."); return s; };
 const retiredDirs = new Set();   // folders a project moved away from: written once more without its rows
 const PLAYBOOK = path.join(ROOT, "PLAYBOOK.md");
@@ -73,12 +76,15 @@ async function load() {
     await fs.mkdir(DATA_DIR, { recursive: true });
   }
   // the rows of projects that keep their own file
+  const seenDirs = new Set();
   for (const project of store.projects) {
     const dir = dataDirOf(project);
-    if (!dir) continue;
+    if (!dir || seenDirs.has(dir)) continue;
+    seenDirs.add(dir);
     try {
       const parsed = JSON.parse(await fs.readFile(path.join(dir, "todos.json"), "utf8"));
-      for (const row of (Array.isArray(parsed.todos) ? parsed.todos : [])) if (!store.todos.some(r => r.id === row.id)) { row.project_id = project.id; store.todos.push(row); }
+      // a row keeps its project when that project shares this folder (a module of the folder's project); otherwise it belongs to the folder's project
+      for (const row of (Array.isArray(parsed.todos) ? parsed.todos : [])) if (!store.todos.some(r => r.id === row.id)) { const owner = store.projects.find(p => p.id === row.project_id); row.project_id = owner && dataDirOf(owner) === dir ? owner.id : project.id; store.todos.push(row); }
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
@@ -128,7 +134,7 @@ async function persist() {
 async function adoptRows(project, dir) {
   try {
     const parsed = JSON.parse(await fs.readFile(path.join(dir, "todos.json"), "utf8"));
-    for (const row of (Array.isArray(parsed.todos) ? parsed.todos : [])) if (!findTodo(row.id)) { row.project_id = project.id; store.todos.push(row); }
+    for (const row of (Array.isArray(parsed.todos) ? parsed.todos : [])) if (!findTodo(row.id)) { const owner = findProject(row.project_id); row.project_id = owner && dataDirOf(owner) === dir ? owner.id : project.id; store.todos.push(row); }
   } catch (error) { if (error.code !== "ENOENT") throw error; }
 }
 
@@ -302,12 +308,32 @@ function checkDone(writes, results) {
 }
 
 // ---------- projects ----------
+// A module's status is its own, like a card's: doing (Current), todo (Next), deferred (Later) or done. New modules start in
+// Next. Nothing is derived from the to-dos inside it. (user, 2026-10-05: "No module have it's own status … Don't complicate.")
+const MODULE_STATUSES = new Set(["doing", "todo", "deferred", "done"]);
+function cleanModuleStatus(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const st = String(value);
+  if (!MODULE_STATUSES.has(st)) throw new HttpError(400, "invalid_argument", "A module's status is doing, todo, deferred or done.");
+  return st;
+}
+// A module is a project inside a project: parent_id names a project that is not itself a module.
+function cleanParent(value, selfId) {
+  if (value === undefined || value === null || value === "") return null;
+  const id = String(value).trim();
+  if (selfId && id === selfId) throw new HttpError(400, "invalid_argument", "A project cannot be its own parent.");
+  const parent = findProject(id);
+  if (!parent) throw new HttpError(400, "invalid_argument", "There is no project with that id to put the module in.");
+  if (parent.parent_id) throw new HttpError(400, "invalid_argument", "A module cannot hold modules: pick the project itself.");
+  if (selfId && store.projects.some(p => p.parent_id === selfId)) throw new HttpError(400, "invalid_argument", "A project with modules cannot become a module.");
+  return parent.id;
+}
 function projectView(project) {
   const rows = store.todos.filter(row => row.project_id === project.id);
   const current = project.current_id ? findTodo(project.current_id) : null;
   const count = status => rows.filter(row => row.status === status).length;
   const dir = dataDirOf(project);
-  return { ...project, paths: { data: dir ? path.join(dir, "todos.json") : DATA, docs: docsDirOf(project), docs_write: writeDirOf(project) }, current: current ? { id: current.id, title: current.title, status: current.status } : null, counts: { total: rows.length, main: rows.filter(row => !row.parent_id && row.status !== "draft").length, draft: count("draft"), doing: count("doing"), todo: count("todo"), done: count("done"), deferred: count("deferred") } };
+  return { ...project, parent_id: project.parent_id || null, status: project.parent_id ? (project.status || "todo") : (project.status || null), paths: { data: dir ? path.join(dir, "todos.json") : DATA, docs: docsDirOf(project), docs_write: writeDirOf(project) }, current: current ? { id: current.id, title: current.title, status: current.status } : null, counts: { total: rows.length, main: rows.filter(row => !row.parent_id && row.status !== "draft").length, main_done: rows.filter(row => !row.parent_id && row.status === "done").length, draft: count("draft"), doing: count("doing"), todo: count("todo"), done: count("done"), deferred: count("deferred") } };
 }
 
 async function createProject(data) {
@@ -317,7 +343,7 @@ async function createProject(data) {
     let id = slug(name);
     for (let n = 2; findProject(id); n++) id = `${slug(name)}-${n}`;
     const stamp = new Date().toISOString();
-    const project = { id, name, description: String(data.description || "").trim(), data_dir: cleanDir(data.data_dir), docs_dir: cleanDir(data.docs_dir), current_id: null, created_at: stamp, updated_at: stamp, version: 1 };
+    const project = { id, name, description: String(data.description || "").trim(), parent_id: cleanParent(data.parent_id), status: cleanParent(data.parent_id) ? (cleanModuleStatus(data.status) || "todo") : null, data_dir: cleanDir(data.data_dir), docs_dir: cleanDir(data.docs_dir), current_id: null, created_at: stamp, updated_at: stamp, version: 1 };
     store.projects.push(project);
     const dir = dataDirOf(project);
     if (dir) await adoptRows(project, dir);
@@ -335,8 +361,10 @@ async function updateProject(id, data, ifVersion) {
     const patch = {};
     if ("name" in data) { patch.name = String(data.name || "").trim(); if (!patch.name) throw new HttpError(400, "invalid_argument", "A project needs a name."); }
     if ("description" in data) patch.description = String(data.description || "").trim();
+    if ("status" in data) patch.status = cleanModuleStatus(data.status) || "todo";
     if ("lanes" in data) patch.lanes = cleanLanes(data.lanes);
     for (const key of ["data_dir", "docs_dir"]) if (key in data) patch[key] = cleanDir(data[key]);
+    if ("parent_id" in data) patch.parent_id = cleanParent(data.parent_id, id);
     const oldDir = dataDirOf(project);
     if ("current_id" in data) {
       if (data.current_id !== null) {
@@ -361,13 +389,43 @@ async function updateProject(id, data, ifVersion) {
   });
 }
 
+// A to-do moves, with everything under it, into another module or back to the project: a child becomes a main to-do there,
+// its lane stays, its next links to the siblings it leaves are dropped, the old project's current pointer is cleared if it was
+// the current one, and a to-do in progress becomes the target's current one when it has none. (user, 2026-10-05)
+async function moveTodo(id, projectId, ifVersion) {
+  return serial(async () => {
+    const row = findTodo(String(id));
+    if (!row) throw new HttpError(404, "not_found", "There is no to-do with that id.");
+    if (ifVersion !== undefined && Number(ifVersion) !== row.version) throw new HttpError(409, "version_mismatch", "This to-do was changed meanwhile; it was reloaded.", { version: row.version });
+    const target = findProject(String(projectId || ""));
+    if (!target) throw new HttpError(400, "invalid_argument", "There is no project or module with that id to move it to.");
+    if (target.id === row.project_id) return row;
+    const ids = new Set([row.id]);
+    for (let grew = true; grew;) { grew = false; for (const r of store.todos) if (!ids.has(r.id) && r.parent_id && ids.has(r.parent_id)) { ids.add(r.id); grew = true; } }
+    const stamp = new Date().toISOString();
+    const mains = store.todos.filter(r => r.project_id === target.id && !r.parent_id);
+    const order = mains.length ? Math.max(0, ...mains.map(r => Number(r.order) || 0)) + 10 : 10;
+    store.todos = store.todos.map(r => {
+      if (ids.has(r.id)) return { ...r, project_id: target.id, ...(r.id === row.id ? { parent_id: null, next_id: null, order, row: null } : {}), updated_at: stamp, version: r.version + 1 };
+      if (r.next_id === row.id) return { ...r, next_id: null, updated_at: stamp, version: r.version + 1 };
+      return r;
+    });
+    const old = findProject(row.project_id);
+    if (old && old.current_id === row.id) Object.assign(old, { current_id: null, updated_at: stamp, version: old.version + 1 });
+    if (row.status === "doing" && !target.current_id) Object.assign(target, { current_id: row.id, updated_at: stamp, version: target.version + 1 });
+    await commit();
+    return findTodo(row.id);
+  });
+}
+
 async function deleteProject(id, ifVersion) {
   return serial(async () => {
     const project = findProject(id);
     if (!project) throw new HttpError(404, "not_found", `There is no project with id ${id}.`);
     if (Number(ifVersion) !== project.version) throw new HttpError(409, "version_mismatch", "This project was changed meanwhile; it was reloaded.", { version: project.version });
+    if (store.projects.some(p => p.parent_id === id)) throw new HttpError(409, "has_modules", "This project has modules: delete them first.");
     const dir = dataDirOf(project);
-    if (dir) retiredDirs.add(dir);
+    if (dir && !store.projects.some(p => p.id !== id && dataDirOf(p) === dir)) retiredDirs.add(dir);
     store.todos = store.todos.filter(row => row.project_id !== id);
     store.projects.splice(store.projects.indexOf(project), 1);
     await commit();
@@ -438,13 +496,15 @@ const TODO_FIELDS = {
 };
 const MCP_TOOLS = [
   { name: "get_playbook", description: "How this board is meant to be worked: lanes, rules, how to review drafts, how to plan a to-do with a document, the document template. Call it first.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
-  { name: "list_projects", description: "The projects, each with its counts and its current main to-do. Start a session here, then list_todos.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
-  { name: "create_project", description: "Make a project. data_dir: the folder whose todos.json holds its rows; docs_dir: the folder its documents are read from and written to; absolute, ~/…, or relative to the server's data folder; leave them out for the server's defaults.", inputSchema: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, data_dir: { type: ["string", "null"] }, docs_dir: { type: ["string", "null"] } }, required: ["name"], additionalProperties: false } },
+  { name: "list_projects", description: "The projects, each with its counts, its current main to-do and its modules (projects inside it, each with its own board, timeline and status; pass a module's id as project_id). Start a session here, then list_todos.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "create_project", description: "Make a project, or a module inside one (parent_id: the project's id; a module uses the project's folders unless it sets its own). data_dir: the folder whose todos.json holds its rows; docs_dir: the folder its documents are read from and written to; absolute, ~/…, or relative to the server's data folder; leave them out for the server's defaults.", inputSchema: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, parent_id: { type: ["string", "null"], description: "The project this module belongs to; leave it out for a project." }, data_dir: { type: ["string", "null"] }, docs_dir: { type: ["string", "null"] } }, required: ["name"], additionalProperties: false } },
+  { name: "update_project", description: "Change a project or module: its name, description, or (a module) its status: doing (Current), todo (Next), deferred (Later) or done. A module's status is its own; nothing inside it changes.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, description: { type: "string" }, status: { type: "string", enum: ["doing", "todo", "deferred", "done"] } }, required: ["id"], additionalProperties: false } },
   { name: "list_todos", description: "The to-dos of a project, in tree order (a child follows its parent), each with created_at (when it was added). Statuses: draft (jotted down, to discuss; review one group at a time), todo (next), doing (current), done, deferred (later). A to-do's doc is the path of its plan document (read_doc).", inputSchema: { type: "object", properties: { project_id: { type: "string" }, status: { type: "string", enum: [...STATUSES] } }, required: ["project_id"], additionalProperties: false } },
   { name: "get_todo", description: "One to-do with every field.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false } },
   { name: "create_todo", description: "Add a to-do to a project. Without a parent it is a main to-do.", inputSchema: { type: "object", properties: { project_id: { type: "string" }, ...TODO_FIELDS }, required: ["project_id", "title"], additionalProperties: false } },
   { name: "update_todo", description: "Change fields of a to-do. Only the fields given change. After a draft is discussed: status todo (or set_current), owner, estimate_days, planned dates, doc. A to-do cannot be set done while anything under it is open (children_open).", inputSchema: { type: "object", properties: { id: { type: "string" }, ...TODO_FIELDS }, required: ["id"], additionalProperties: false } },
   { name: "delete_todo", description: "Delete a to-do; its children move up one level.", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false } },
+  { name: "move_todo", description: "Move a to-do, with everything under it, into another module or back to the project (project_id: the target's id). A child becomes a main to-do there; its lane stays; a to-do in progress becomes the target's current one when it has none.", inputSchema: { type: "object", properties: { id: { type: "string" }, project_id: { type: "string", description: "The module or project it moves to." } }, required: ["id", "project_id"], additionalProperties: false } },
   { name: "set_current", description: "Make a main to-do the project's current one: it goes in progress from today. Pass null to clear.", inputSchema: { type: "object", properties: { project_id: { type: "string" }, todo_id: { type: ["string", "null"] } }, required: ["project_id", "todo_id"], additionalProperties: false } },
   { name: "read_doc", description: "Read a to-do's plan document: a markdown file under the project's docs folder, by the path in its doc field. Give project_id so the right folder is used (list_projects shows each project's paths).", inputSchema: { type: "object", properties: { path: { type: "string" }, project_id: { type: "string" } }, required: ["path"], additionalProperties: false } },
   { name: "write_doc", description: "Write a plan document (markdown) inside the docs write folder and get the path to put in the to-do's doc field. mode: create (the default; refuses to overwrite), replace, or append (for Progress and Decisions lines). Follow the playbook's template.", inputSchema: { type: "object", properties: { path: { type: "string", description: "File name or path ending in .md, e.g. export-button.md" }, content: { type: "string" }, mode: { type: "string", enum: ["create", "replace", "append"] }, project_id: { type: "string", description: "The project whose docs folder receives the file; give it whenever the project has folders of its own." } }, required: ["path", "content"], additionalProperties: false } },
@@ -496,8 +556,9 @@ async function mcpCall(name, args = {}) {
     case "get_playbook": return { playbook: await readPlaybook() };
     case "read_doc": return await readDoc(String(args.path || ""), args.project_id);
     case "write_doc": return await writeDoc(args.path, args.content, args.mode || "create", args.project_id);
-    case "list_projects": return store.projects.map(projectView);
+    case "list_projects": return store.projects.filter(p => !p.parent_id).map(p => ({ ...projectView(p), modules: store.projects.filter(m => m.parent_id === p.id).map(projectView) }));
     case "create_project": return await createProject(args);
+    case "update_project": { const p = findProject(String(args.id)); if (!p) throw new HttpError(404, "not_found", "There is no project with that id."); const { id, ...fields } = args; if ("status" in fields && !p.parent_id) throw new HttpError(400, "invalid_argument", "Only a module has a status."); return projectView(await updateProject(p.id, fields, p.version)); }
     case "list_todos": {
       if (!findProject(String(args.project_id))) throw new HttpError(404, "not_found", "There is no project with that id.");
       const rows = treeOrder(store.todos.filter(row => row.project_id === args.project_id));
@@ -520,6 +581,7 @@ async function mcpCall(name, args = {}) {
       const [next] = await applyWrites([{ op: "update", id: row.id, if_version: row.version, data: { ...fields, updated_at: stamp } }]);
       return next;
     }
+    case "move_todo": return moveTodo(String(args.id), String(args.project_id));
     case "delete_todo": {
       const row = findTodo(String(args.id));
       if (!row) throw new HttpError(404, "not_found", "There is no to-do with that id.");
@@ -568,7 +630,7 @@ async function mcpMessage(msg) {
   switch (msg.method) {
     case "initialize": {
       const asked = msg.params && msg.params.protocolVersion;
-      return reply({ protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0], capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } }, serverInfo: { name: "projecttodo", version: "0.2.0" }, instructions: "A to-do board shared with a person. Call get_playbook first: it says how the board is worked. In short: projects hold to-dos; a to-do without a parent is a main to-do and sits on the timeline by its dates. Lanes are statuses: draft (jotted down by the person, to discuss one group at a time), todo (Next), doing (Current), done, deferred (Later). After a draft is discussed, write its plan with write_doc, put the path in doc, set owner, estimate_days and planned dates, and move it on (set_current for the one that starts now). Setting status doing or done stamps the actual date and time of day; keep them current. Estimates are days, with fractions for hours (8 hours a day). A to-do is done only when everything under it is done. A draft group with a single line is usually a title and its explanation: put the line in the group's notes and delete it, unless it is a step that can be finished on its own. For each draft line decide whether it is a step (work that can be finished on its own: a to-do) or an instruction for the parent (how it should behave, a rule, a reason: into the parent's notes or plan document, not a to-do); ask when it could be either. A draft with no title is a loose list: group its lines into one or more to-dos, propose a title for each, confirm, then create them. Never delete the person's other draft lines or invent estimates without asking. list_projects shows each project's folders under paths; pass project_id to read_doc and write_doc. Dates are YYYY-MM-DD." });
+      return reply({ protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0], capabilities: { tools: { listChanged: false }, prompts: { listChanged: false } }, serverInfo: { name: "projecttodo", version: "0.2.0" }, instructions: "A to-do board shared with a person. Call get_playbook first: it says how the board is worked. In short: projects hold to-dos; a to-do without a parent is a main to-do and sits on the timeline by its dates. Lanes are statuses: draft (jotted down by the person, to discuss one group at a time), todo (Next), doing (Current), done, deferred (Later). After a draft is discussed, write its plan with write_doc, put the path in doc, set owner, estimate_days and planned dates, and move it on (set_current for the one that starts now). Setting status doing or done stamps the actual date and time of day; keep them current. Never set a to-do done on your own: when your part is finished say so and leave it in doing until the person confirms it is done or says to move on; then set done with the real actual_done and actual_done_time. Estimates are days, with fractions for hours (8 hours a day). A to-do is done only when everything under it is done. A draft group with a single line is usually a title and its explanation: put the line in the group's notes and delete it, unless it is a step that can be finished on its own. For each draft line decide whether it is a step (work that can be finished on its own: a to-do) or an instruction for the parent (how it should behave, a rule, a reason: into the parent's notes or plan document, not a to-do); ask when it could be either. A draft with no title is a loose list: group its lines into one or more to-dos, propose a title for each, confirm, then create them. Never delete the person's other draft lines or invent estimates without asking. A project may have modules: projects inside it, each with its own board, timeline and current to-do; list_projects shows them under their project; pass the module's id as project_id. list_projects shows each project's folders under paths; pass project_id to read_doc and write_doc. Dates are YYYY-MM-DD." });
     }
     case "ping": return reply({});
     case "tools/list": return reply({ tools: MCP_TOOLS });
@@ -642,13 +704,17 @@ const server = http.createServer(async (req, res) => {
     if (oneProject && req.method === "DELETE") { const body = await readBody(req); await deleteProject(decodeURIComponent(oneProject[1]), body.if_version ?? url.searchParams.get("if_version")); return send(res, 200, { revision: store.revision, deleted: decodeURIComponent(oneProject[1]) }); }
     if (pathname === "/api/todos" && req.method === "GET") {
       const project = url.searchParams.get("project");
-      return send(res, 200, { revision: store.revision, todos: project ? store.todos.filter(row => row.project_id === project) : store.todos });
+      // modules=1: the rows of the project's modules come too (the project's timeline shows them)
+      const ids = project ? new Set([project, ...(url.searchParams.get("modules") ? store.projects.filter(p => p.parent_id === project).map(p => p.id) : [])]) : null;
+      return send(res, 200, { revision: store.revision, todos: ids ? store.todos.filter(row => ids.has(row.project_id)) : store.todos });
     }
     if (pathname === "/api/todos" && req.method === "POST") {
       const body = await readBody(req);
       const [row] = await applyWrites([{ op: "set", data: body.data || body, if_version: body.if_version }]);
       return send(res, 201, { revision: store.revision, todo: row });
     }
+    const mv = pathname.match(/^\/api\/todos\/([^/]+)\/move$/);
+    if (mv && req.method === "POST") { const body = await readBody(req); return send(res, 200, { revision: store.revision, todo: await moveTodo(decodeURIComponent(mv[1]), (body.data || body).project_id, body.if_version) }); }
     const one = pathname.match(/^\/api\/todos\/([^/]+)$/);
     if (one && (req.method === "PATCH" || req.method === "PUT")) {
       const body = await readBody(req);

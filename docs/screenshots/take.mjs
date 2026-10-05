@@ -37,6 +37,19 @@ const DRAFT_PAD = `
   }
   document.activeElement && document.activeElement.blur();
 `;
+// The last shots want modules in the sample project: made through the API when missing (the data is a scratch copy).
+const ADD_MODULES = async () => {
+  const j = async (method, path, body) => { const r = await fetch(BASE + path, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined }); return r.json(); };
+  const { projects } = await j("GET", "/api/projects");
+  if (projects.some(p => p.id === "checkout")) return;
+  await j("POST", "/api/projects", { data: { name: "Checkout", description: "Cart to payment", parent_id: "website" } });
+  await j("POST", "/api/projects", { data: { name: "Blog", parent_id: "website" } });
+  await j("POST", "/api/todos", { data: { id: "cart-page", project_id: "checkout", title: "Cart page", status: "done", order: 10, actual_start: "2026-10-03", actual_done: "2026-10-04" } });
+  await j("POST", "/api/todos", { data: { id: "payment-step", project_id: "checkout", title: "Payment step", status: "doing", order: 20 } });
+  await j("POST", "/api/todos", { data: { id: "thank-you", project_id: "checkout", title: "Thank-you page", status: "todo", order: 30, planned_start: "2026-10-07", planned_end: "2026-10-08" } });
+  const now = (await j("GET", "/api/projects")).projects.find(p => p.id === "checkout");
+  await j("PATCH", "/api/projects/checkout", { if_version: now.version, data: { current_id: "payment-step" } });
+};
 const SHOTS = [
   { file: "projects.png", url: "/", width: 1200, height: 300, theme: "dark" },
   { file: "board.png", url: "/p/website", width: 1200, height: 540, theme: "dark" },
@@ -48,6 +61,8 @@ const SHOTS = [
   { file: "layout-focus.png", url: "/p/website", width: 1200, height: 620, theme: "paper", layout: "focus", setup: `document.querySelector(".lane[data-lane='doing'] .card .fact").dispatchEvent(new MouseEvent("click", { bubbles: true }));` },
   { file: "layout-wall.png", url: "/p/website", width: 1200, height: 540, theme: "midnight", layout: "wall" },
   { file: "layout-wall-calendar.png", url: "/p/website/tree", width: 1200, height: 560, theme: "midnight", layout: "wall" },
+  { file: "projects-modules.png", url: "/", width: 1200, height: 420, theme: "dark", before: ADD_MODULES },
+  { file: "timeline-modules.png", url: "/p/website/tree", width: 1200, height: 420, theme: "dark", setup: `localStorage.setItem("projecttodo-module-todos", "1"); const cb = document.getElementById("tl-show-todos"); cb.checked = true; cb.dispatchEvent(new Event("change")); document.getElementById("tl-wrap").scrollLeft = 0;` },
 ];
 
 // ---- a tiny DevTools client
@@ -94,6 +109,7 @@ try {
   const waitFor = async (expression, ms = 15000) => { const until = Date.now() + ms; while (Date.now() < until) { if (await evaluate(expression)) return; await sleep(100); } throw new Error(`Timed out waiting for: ${expression}`); };
 
   for (const shot of SHOTS) {
+    if (shot.before) await shot.before();
     await page("Emulation.setDeviceMetricsOverride", { width: shot.width, height: shot.height, deviceScaleFactor: 2, mobile: false });
     await page("Page.navigate", { url: `${BASE}/` });
     await waitFor(`document.readyState === "complete"`);

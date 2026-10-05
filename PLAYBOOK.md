@@ -11,6 +11,12 @@ assistants, put one line in their instructions: *before working on the to-do boa
 
 - A **project** holds to-dos. `list_projects` shows each project's counts and its
   **current** main to-do.
+- A project may have **modules**: projects inside it, each with its own board, timeline,
+  lanes, current to-do and documents. `list_projects` lists them under their project;
+  pass a module's id as `project_id` to work in it. A module cannot hold modules.
+  `move_todo` moves a to-do, with everything under it, into a module or back to the
+  project. A module has a status of its own (doing, todo, deferred, done; new ones start
+  as todo), set with `update_project`; nothing inside it changes with it.
 - A **main to-do** has no parent. It sits on the timeline by its dates and is a card on
   the board. Everything under it (children, grandchildren) is listed inside the card.
 - **Statuses** are lanes: `draft` (Drafts: jotted down, to discuss), `todo` (Next),
@@ -55,6 +61,13 @@ assistants, put one line in their instructions: *before working on the to-do boa
    theme"): it is not a to-do of its own; it goes into the parent's `notes` or its plan
    document, in the person's words, so nothing is lost. Ask when a line could be
    either. Titles stay short because the how lives in the notes, not by a word count.
+7. **Done is the person's call.** Never set a to-do to done on your own, a child or a
+   main one. When your part of the work is finished, say so and leave the to-do in
+   Current; it stays there until the person has looked at it and says it is done, or
+   says to move on, or agrees in other words ("good", "works", "next"). Keep working on
+   that one thing until then. When they confirm, set `status: done` and pass the real
+   end as `actual_done` and `actual_done_time` (note them when the work ends), so the
+   record keeps when the work finished rather than when it was confirmed.
 
 ## Session start
 
@@ -116,12 +129,13 @@ When a to-do needs a plan (any main to-do; a child when it is big):
 - Starting a main to-do: `set_current`. Starting a child: `status: doing`; the server
   stamps `actual_start` and its time, and gives its parents the same start if they had
   none. Do it the moment the work starts, not after.
-- Finishing a child: `status: done`; the server stamps `actual_done` and its time. Do it
-  the moment the work ends. Add a dated line to the
-  document's **Progress** section when something notable happened (a decision, a
-  surprise, a change of estimate).
-- Finishing a main to-do: only after every child is done; then `status: done` and
-  `actual_done`.
+- Finishing a child: when your part is done, say so and note the time; set
+  `status: done` only when the person confirms (rule 7), passing `actual_done` and
+  `actual_done_time` from your note so the record keeps the real end. Add a dated
+  line to the document's **Progress** section when something notable happened (a
+  decision, a surprise, a change of estimate).
+- Finishing a main to-do: only after every child is done and the person has confirmed
+  the whole; then `status: done` with the real `actual_done` and its time.
 - Blocked or postponed: `deferred`, and a Progress line that says why and what would
   unblock it.
 - Re-estimating: change `estimate_days` and `planned_end`, and say so in Progress.

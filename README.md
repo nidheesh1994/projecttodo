@@ -13,6 +13,17 @@ to-dos you see.
   write its documents in its own folder; both are asked for when the project is made and
   default to the server's folders. The server reads and writes whichever folders you name,
   which is fine on your own machine and the reason it should stay there.
+- **Modules**: a project can be split into modules, each a project inside it with its own
+  board, timeline, lanes, current to-do and documents (it uses the project's folders unless
+  it sets its own). A module has a status of its own, like a card (Current, Next, Later or
+  Done; new modules start in Next), whatever is inside it. The projects page lists a
+  project's modules with that status, how many main to-dos are done and the current one;
+  on the project's board a module is a card of its own in that lane, marked Module, which
+  opens the module's board; drag the card to another lane to change its status; "+ Module" adds one, and a module's pages say "Project › Module". The project's own
+  timeline shows each module as a bar from its earliest start to its latest end, with a
+  "Show to-dos" switch that hangs the module's main to-dos under it. To move a to-do into
+  a module, drop its card on the module's card; to move it back to the project or to
+  another module, pick the place in the editor's In field; everything under it moves along.
 - **Board**: lanes for Drafts, Current, Next, Done and Later. Press **+** on Drafts (or
   "New draft") and type a title and a list like a notepad: Enter for the next line, Tab
   for a child, Shift+Tab back out; the pad is one text field, so you can select across
@@ -77,6 +88,10 @@ to-dos you see.
 
 ![Timeline](docs/screenshots/timeline.png)
 
+| A project's modules | The project's timeline with its modules |
+|---|---|
+| ![Modules on the projects page](docs/screenshots/projects-modules.png) | ![Module bars, with their to-dos shown](docs/screenshots/timeline-modules.png) |
+
 | Paper | Midnight |
 |---|---|
 | ![Paper theme](docs/screenshots/theme-paper.png) | ![Midnight theme](docs/screenshots/theme-midnight.png) |
@@ -137,8 +152,8 @@ Clients that need a public HTTPS address (a hosted ChatGPT connector, for exampl
 a tunnel in front of it; the server has no login, so keep it on your own machine or
 behind one.
 
-Tools: `get_playbook`, `list_projects`, `create_project`, `list_todos`, `get_todo`,
-`create_todo`, `update_todo`, `delete_todo`, `set_current`, `add_draft`, `read_doc`,
+Tools: `get_playbook`, `list_projects`, `create_project`, `update_project`, `list_todos`, `get_todo`,
+`create_todo`, `update_todo`, `delete_todo`, `move_todo`, `set_current`, `add_draft`, `read_doc`,
 `write_doc`. Prompts (clients that list MCP prompts, such as Claude Desktop, offer them
 as commands): `review_drafts`, `submit_draft`, `plan_todo`, `daily_review`.
 
@@ -148,7 +163,8 @@ Connecting the server tells an assistant what the tools are, not how you want th
 worked. That lives in one file, [PLAYBOOK.md](PLAYBOOK.md): the lanes, the rules (drafts
 belong to the person; a to-do is done only when everything under it is done; no invented
 estimates; a draft line is a to-do when it is a step of its own and goes into the notes or
-the document when it is an instruction for the parent), how to review draft groups one at a time, how to plan a to-do with a
+the document when it is an instruction for the parent; a to-do is set done only when the
+person confirms it), how to review draft groups one at a time, how to plan a to-do with a
 document, and the document template. The server sends a summary when a client connects,
 and the `get_playbook` tool returns the whole file, so every MCP client can read it.
 
@@ -178,9 +194,11 @@ Edit the playbook to fit how you work; the assistant reads it fresh each time.
 
 ## Rows
 
-A project: `id, name, description, data_dir, docs_dir, lanes ({order, colors}), current_id,
-created_at, updated_at, version`. `data_dir` and `docs_dir` are empty for the server's
-defaults; the listing adds `paths` with the folders in use.
+A project: `id, name, description, parent_id (the project a module belongs to; null for a
+project), data_dir, docs_dir, lanes ({order, colors}), current_id, created_at, updated_at,
+version`. `data_dir` and `docs_dir` are empty for the server's defaults (a module's for its
+project's); the listing adds `paths` with the folders in use and `status` (a module's own:
+doing, todo, deferred or done; new modules start as todo).
 
 A to-do:
 
@@ -217,10 +235,11 @@ estimate in days (one day if none). Deleting a parent moves its children up one 
 | Call | Body | Does |
 |---|---|---|
 | `GET /api/projects` | | `{projects}` with counts and the current main to-do |
-| `POST /api/projects` | `{data: {name, description}}` | makes a project |
-| `PATCH /api/projects/{id}` | `{if_version, data: {name, description, current_id}}` | changes it; setting `current_id` starts that main to-do today |
-| `DELETE /api/projects/{id}` | `{if_version}` | removes it and its to-dos |
-| `GET /api/todos?project={id}` | | `{todos}` |
+| `POST /api/projects` | `{data: {name, description, parent_id}}` | makes a project, or a module inside the project `parent_id` names |
+| `PATCH /api/projects/{id}` | `{if_version, data: {name, description, current_id, parent_id, status}}` | changes it; setting `current_id` starts that main to-do today; `status` is a module's own lane |
+| `DELETE /api/projects/{id}` | `{if_version}` | removes it and its to-dos; 409 `has_modules` while it has modules |
+| `GET /api/todos?project={id}` | `&modules=1` adds the rows of the project's modules | `{todos}` |
+| `POST /api/todos/{id}/move` | `{if_version, data: {project_id}}` | moves it, with everything under it, to that module or project; a child becomes a main to-do there |
 | `POST /api/todos` | `{data: {id, project_id, title, …}}` | creates a row (409 if the id exists) |
 | `PATCH /api/todos/{id}` | `{if_version, data: {…}}` | merges fields; 409 `version_mismatch` when the row changed meanwhile, 409 `children_open` when it would be done with open to-dos under it, 400 `unknown_field` for a field the row does not have |
 | `DELETE /api/todos/{id}` | `{if_version}` | removes a row |

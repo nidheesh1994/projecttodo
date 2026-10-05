@@ -315,6 +315,17 @@ html[data-layout="wall"] .zoom { display: none; }
 .project-card .card-title { font-size: 16px; }
 .project-card .current-line { margin-top: 8px; font-size: 12.5px; color: var(--fg); }
 .project-card .current-line b { color: var(--today); font-weight: 600; }
+.project-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.modules { display: flex; flex-direction: column; gap: 4px; padding: 0 0 0 14px; }
+.module-line { position: relative; display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: center; padding: 7px 34px 7px 12px; border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); color: inherit; text-decoration: none; font-size: 13px; }
+.module-line .name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.module-line .sub { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; }
+.module-line .edit { position: absolute; top: 5px; right: 6px; opacity: 0; }
+.module-line:hover .edit, .module-line:focus-within .edit { opacity: 1; }
+.add-module { align-self: flex-start; font-size: 12px; padding: 3px 10px; }
+.project-title .crumb { color: var(--muted); text-decoration: none; }
+.project-title .crumb:hover { text-decoration: underline; }
+.project-title .crumb-sep { color: var(--muted); }
 .f.check { flex-direction: row; align-items: center; gap: 8px; color: var(--fg); font-size: 13px; }
 /* The details view: what a to-do is, read at a glance; Edit opens the form. */
 .dv-dialog { width: min(540px, 100%); }
@@ -404,6 +415,14 @@ section { margin-top: 26px; }
 .card.compact .when { color: var(--muted); font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap; }
 .card:hover { outline: 1px solid var(--line-strong); }
 .card.dragging { opacity: 0.45; }
+.card.module { display: block; color: inherit; text-decoration: none; background: var(--surface-2); border: 1px dashed var(--line-strong); border-left: 3px solid var(--line-strong); }
+.card.module .card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card.module .card-title { font-weight: 700; }
+.card.module .module-tag { flex: none; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-color: var(--line-strong); }
+.card.module .fact { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.card.module:hover { border-color: var(--accent); }
+.card.module.over { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+.card.module.done { border-left-color: var(--done); }
 .card.done { border-left-color: var(--accent); }
 .card.doing { border-left-color: var(--accent); border-left-style: dashed; }
 .card-top { display: flex; align-items: flex-start; gap: 4px; }
@@ -461,6 +480,10 @@ svg.tl { display: block; font-family: var(--font-ui); }
 .drop-band { position: absolute; left: 8px; right: 8px; box-sizing: border-box; border: 1px dashed var(--accent); border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, transparent); pointer-events: none; z-index: 2; }
 .drop-band.bad { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .gbox.movable.bad { outline: 2px solid var(--danger); outline-offset: 1px; }
+.gbox.module { border-width: 2px; }
+.gbox.module .gtitle::before { content: "Module · "; color: var(--muted); font-weight: 500; }
+.tl-opt { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.tl-opt input { margin: 0; }
 .gbox.movable { cursor: grab; touch-action: none; }
 .gbox.movable.dragging { cursor: grabbing; opacity: 0.85; z-index: 3; }
 .gbox .grip { position: absolute; top: 0; bottom: 0; width: 10px; cursor: ew-resize; }
@@ -621,7 +644,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
   </section>
 
   <section id="timeline">
-    <div class="sec-head"><h2>Timeline</h2><span class="zoom" role="group" aria-label="Zoom"><button class="icon-btn" id="tl-out" type="button" title="Zoom out (Cmd and minus, or Cmd and scroll)" aria-label="Zoom out">−</button><button class="zoom-level" id="tl-zoom" type="button" title="Back to 100%">100%</button><button class="icon-btn" id="tl-in" type="button" title="Zoom in (Cmd and plus, or Cmd and scroll)" aria-label="Zoom in">+</button></span><span class="counts" id="tl-counts"></span></div>
+    <div class="sec-head"><h2>Timeline</h2><span class="zoom" role="group" aria-label="Zoom"><button class="icon-btn" id="tl-out" type="button" title="Zoom out (Cmd and minus, or Cmd and scroll)" aria-label="Zoom out">−</button><button class="zoom-level" id="tl-zoom" type="button" title="Back to 100%">100%</button><button class="icon-btn" id="tl-in" type="button" title="Zoom in (Cmd and plus, or Cmd and scroll)" aria-label="Zoom in">+</button></span><label class="tl-opt" id="tl-show-wrap" hidden title="Hang each module's main to-dos under its bar"><input type="checkbox" id="tl-show-todos"> Show to-dos</label><span class="counts" id="tl-counts"></span></div>
     <div class="tl-panel" id="tl-wrap"><div class="empty">Loading…</div></div>
     <div class="legend" aria-label="Legend">
       <span><i class="sw done"></i>Done</span>
@@ -664,8 +687,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
     <div class="form">
       <label class="f full">Name<input id="pm-name" type="text" maxlength="120" required></label>
       <label class="f full">Description<input id="pm-desc" type="text" maxlength="300"></label>
-      <label class="f full">Data folder<input id="pm-data" type="text" maxlength="500" spellcheck="false"><span class="help">Where this project's to-dos file lives (a todos.json inside it). Absolute, ~/…, or relative to the server's data folder. Empty keeps it in the server's own file.</span></label>
-      <label class="f full">Documents folder<input id="pm-docs" type="text" maxlength="500" spellcheck="false"><span class="help">The folder a to-do's Doc path is read from, and where an assistant writes plan documents. Empty uses the server's folder.</span></label>
+      <label class="f full">Data folder<input id="pm-data" type="text" maxlength="500" spellcheck="false"><span class="help" id="pm-data-help">Where this project's to-dos file lives (a todos.json inside it). Absolute, ~/…, or relative to the server's data folder. Empty keeps it in the server's own file.</span></label>
+      <label class="f full">Documents folder<input id="pm-docs" type="text" maxlength="500" spellcheck="false"><span class="help" id="pm-docs-help">The folder a to-do's Doc path is read from, and where an assistant writes plan documents. Empty uses the server's folder.</span></label>
     </div>
     <div class="dialog-actions">
       <span class="spacer"></span>
@@ -705,6 +728,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       <label class="f full">Notes<textarea id="ed-notes" name="notes" maxlength="4000"></textarea></label>
       <label class="f">Parent<select id="ed-parent" name="parent_id"></select></label>
       <label class="f">Next to-do<select id="ed-next" name="next_id"></select></label>
+      <label class="f" id="ed-in-wrap" hidden>In<select id="ed-in"></select></label>
       <label class="f check" id="ed-current-wrap" hidden><input id="ed-current" type="checkbox"><span>Current main to-do (starts today)</span></label>
       <label class="f">Status<select id="ed-status" name="status">
         <option value="draft">Draft (to discuss)</option>
@@ -911,11 +935,11 @@ svg.tl { display: block; font-family: var(--font-ui); }
   }
 
   // ---------- tree ----------
-  function index() {
-    const byId = new Map(state.items.map(i => [i.id, i]));
+  function buildIndex(items) {
+    const byId = new Map(items.map(i => [i.id, i]));
     const kids = new Map();
     const parentOf = it => (it.parent_id && it.parent_id !== it.id && byId.has(it.parent_id)) ? it.parent_id : null;
-    for (const it of state.items) {
+    for (const it of items) {
       const p = parentOf(it);
       if (!kids.has(p)) kids.set(p, []);
       kids.get(p).push(it);
@@ -934,9 +958,10 @@ svg.tl { display: block; font-family: var(--font-ui); }
     };
     walk(null, 0, []);
     // anything unreachable (a cycle) is shown as a root rather than hidden
-    for (const it of state.items.slice().sort(cmp)) if (!seen.has(it.id)) { seen.add(it.id); rows.push({ it, depth: 0, anc: [] }); }
+    for (const it of items.slice().sort(cmp)) if (!seen.has(it.id)) { seen.add(it.id); rows.push({ it, depth: 0, anc: [] }); }
     return { byId, kids, rows, parentOf };
-  }
+  }  const index = () => buildIndex(state.items);
+
   const siblingsOf = (idx, parentId) => (idx.kids.get(parentId || null) || []).slice();
   // The tree under a to-do as a flat list, done ones first at each level so finished work stacks at the top (user, 2026-10-04).
   function linesUnder(idx, it) {
@@ -1199,6 +1224,47 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function paletteKey(e) { if (e.key === "Escape") closePalette(); }
   function closePalette() { const pal = $("#palette"); if (pal) pal.remove(); document.removeEventListener("mousedown", paletteAway); document.removeEventListener("keydown", paletteKey); }
 
+  // Where a to-do of this project can move: its modules, or (from a module) the project and the other modules.
+  function moveTargets() {
+    const p = currentProject();
+    if (!p) return [];
+    return state.projects.filter(x => x.id !== p.id && (x.parent_id === p.id || (p.parent_id && (x.id === p.parent_id || x.parent_id === p.parent_id))));
+  }
+  async function moveTodoTo(id, target) {
+    const it = index().byId.get(id);
+    if (!it) return;
+    const ok = await write(`Moving to ${target.name}`, () => call("POST", `/api/todos/${encodeURIComponent(id)}/move`, { if_version: it.version, data: { project_id: target.id } }));
+    if (ok) { toast(`Moved "${it.title || "Untitled"}" to ${target.name}`); loadAll(); }
+  }
+  // A module on its project's board: a card of its own in the lane its to-dos put it in; it opens the module's board, and a
+  // to-do dropped on it moves into the module (user, 2026-10-05).
+  const moduleCardsFor = laneKey => { const p = currentProject(); return p ? state.projects.filter(m => m.parent_id === p.id && (m.status || "todo") === laneKey) : []; };
+  // A module dropped in a lane takes it, whatever is inside it; Drafts is not a lane for modules.
+  async function dropModule(id, laneKey) {
+    const m = state.projects.find(p => p.id === id);
+    if (!m) return;
+    if (laneKey === "draft") { toast("A module cannot go to Drafts.", true); return; }
+    if ((m.status || "todo") === laneKey) return;
+    const ok = await write(`Moving ${m.name}`, () => call("PATCH", `/api/projects/${encodeURIComponent(m.id)}`, { if_version: m.version, data: { status: laneKey } }));
+    if (ok) loadAll();
+  }
+  function renderModuleCard(m) {
+    const c = m.counts || {};
+    const st = m.status || "todo";
+    const card = el("a", { class: `card module ${st}`, href: `/p/${encodeURIComponent(m.id)}`, title: `Open the board of ${m.name}; drop a card on it to move that to-do into the module` },
+      el("div", { class: "card-top" }, el("div", { class: "card-title", text: m.name }), el("span", { class: "chip module-tag", text: "Module" })),
+      el("div", { class: "fact", text: [c.main ? `${c.main_done || 0} of ${c.main} main done` : "no to-dos yet", m.current ? `current: ${m.current.title}` : ""].filter(Boolean).join(" · ") }));
+    if (!state.readOnly) {
+      // dragged to a lane, the module takes that lane (user, 2026-10-05); a to-do dropped on it moves into the module
+      card.draggable = true;
+      card.addEventListener("dragstart", e => { state.dragModule = m.id; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", `module:${m.id}`); } catch (err) { /* older engines */ } card.classList.add("dragging"); });
+      card.addEventListener("dragend", () => { state.dragModule = null; card.classList.remove("dragging"); document.querySelectorAll(".lane.over").forEach(l => l.classList.remove("over")); });
+      card.addEventListener("dragover", e => { if (!state.dragId) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; card.classList.add("over"); });
+      card.addEventListener("dragleave", () => card.classList.remove("over"));
+      card.addEventListener("drop", e => { e.preventDefault(); e.stopPropagation(); card.classList.remove("over"); const id = state.dragId; state.dragId = null; if (id) moveTodoTo(id, m); });
+    }
+    return card;
+  }
   function renderBoard(idx) {
     const board = $("#board-lanes");
     const keepTop = board.scrollTop;
@@ -1222,8 +1288,11 @@ svg.tl { display: block; font-family: var(--font-ui); }
           state.readOnly ? null : el("button", { class: "icon-btn", type: "button", title: `Add a to-do to ${lane.label}`, "aria-label": `Add a to-do to ${lane.label}`, onclick: () => lane.key === "draft" ? openDraftModal({}) : openEditor(null, { status: lane.key }) }, "+")));
       counts[lane.key] = inLane.length;
       nEl.textContent = String(inLane.length);
+      // the project's modules sit in the lane of their status, as module cards, before the to-dos (user, 2026-10-05)
+      const mods = moduleCardsFor(lane.key);
+      for (const m of mods) cards.append(renderModuleCard(m));
       for (const r of inLane) cards.append(renderGroupCard(r.it, idx, lane));
-      if (!inLane.length) cards.append(el("div", { class: "empty", text: state.loaded ? `Nothing in ${lane.label}. Drop a card here or press + to add one.` : "Loading the shared to-dos…" }));
+      if (!inLane.length && !mods.length) cards.append(el("div", { class: "empty", text: state.loaded ? `Nothing in ${lane.label}. Drop a card here or press + to add one.` : "Loading the shared to-dos…" }));
       if (!state.readOnly) {
         // the header moves the whole column; a card moves within or between columns
         head.addEventListener("dragstart", e => {
@@ -1234,7 +1303,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
           laneEl.classList.add("dragging-lane");
         });
         head.addEventListener("dragend", () => { state.dragLane = null; laneEl.classList.remove("dragging-lane"); document.querySelectorAll(".lane.over-lane, .lane.over").forEach(l => l.classList.remove("over-lane", "over")); });
-        laneEl.addEventListener("dragover", e => { if (!state.dragId && !state.dragLane) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; laneEl.classList.add(state.dragLane ? "over-lane" : "over"); });
+        laneEl.addEventListener("dragover", e => { if (!state.dragId && !state.dragLane && !(state.dragModule && lane.key !== "draft")) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; laneEl.classList.add(state.dragLane ? "over-lane" : "over"); });
         laneEl.addEventListener("dragleave", e => { if (!laneEl.contains(e.relatedTarget)) laneEl.classList.remove("over", "over-lane"); });
         laneEl.addEventListener("drop", e => {
           e.preventDefault();
@@ -1250,11 +1319,12 @@ svg.tl { display: block; font-family: var(--font-ui); }
             saveLanes({ order });
             return;
           }
+          if (state.dragModule) { const mid = state.dragModule; state.dragModule = null; dropModule(mid, lane.key); return; }
           let id = state.dragId;
           if (!id) { try { id = e.dataTransfer.getData("text/plain"); } catch (err) { id = null; } }
           state.dragId = null;
           if (!id) return;
-          const cardEls = [...cards.querySelectorAll(".card")].filter(c => c.dataset.id !== id);
+          const cardEls = [...cards.querySelectorAll(".card:not(.module)")].filter(c => c.dataset.id !== id);
           dropItem(id, lane.key, dropBefore(cardEls, e.clientX, e.clientY));
         });
       }
@@ -1545,6 +1615,13 @@ svg.tl { display: block; font-family: var(--font-ui); }
     wrap.scrollLeft = Math.max(0, anchor * z - offset);
   }
   const tlZoomStep = (dir, clientX) => { const i = ZOOMS.indexOf(state.tlZoom || 1); tlZoomTo(ZOOMS[Math.max(0, Math.min(ZOOMS.length - 1, (i < 0 ? 4 : i) + dir))], clientX); };
+  try { state.showModuleTodos = localStorage.getItem("projecttodo-module-todos") === "1"; } catch (e) { /* fine */ }
+  $("#tl-show-todos").checked = !!state.showModuleTodos;
+  $("#tl-show-todos").addEventListener("change", e => {
+    state.showModuleTodos = e.target.checked;
+    try { localStorage.setItem("projecttodo-module-todos", state.showModuleTodos ? "1" : "0"); } catch (err) { /* fine */ }
+    renderTimeline(index());
+  });
   $("#tl-in").addEventListener("click", () => tlZoomStep(1));
   $("#tl-out").addEventListener("click", () => tlZoomStep(-1));
   $("#tl-zoom").addEventListener("click", () => tlZoomTo(1));
@@ -1574,8 +1651,33 @@ svg.tl { display: block; font-family: var(--font-ui); }
   }, 60000);
 
   // ---------- the timeline: dates along the top; each main to-do spans its days, its tree hangs under it ----------
+  // The rows a project's timeline gets for its modules: a bar per module (its earliest actual start to its latest end, or
+  // its earliest to latest estimated day), and under the bar, when asked, the module's main to-dos. (user, 2026-10-05)
+  function withModuleBars(idx, modules, showTodos) {
+    const today = parseDay(todayStr());
+    const extra = [];
+    modules.forEach((m, i) => {
+      const midx = buildIndex((state.moduleItems || []).filter(r => r.project_id === m.id));
+      const mains = orderedKids(midx, null).filter(r => statusOf(r) !== "draft");
+      const spans = mainSpans(midx, mains, today);
+      const bar = { id: `module:${m.id}`, project_id: state.project, title: m.name, notes: m.description || "", parent_id: null, next_id: null, order: -1e6 + i, owner: null, doc: null, docs: null, estimate_days: null, planned_start: null, planned_end: null, actual_start: null, actual_start_time: null, actual_done: null, actual_done_time: null, created_at: m.created_at, updated_at: m.updated_at, version: m.version, isModule: true, module: m.id, moduleMain: mains.length, moduleDone: mains.filter(r => statusOf(r) === "done").length, status: m.status || "todo" };
+      const at = r => `${r.actual_start} ${r.actual_start_time || "00:00"}`, dn = r => `${r.actual_done} ${r.actual_done_time || "23:59"}`;
+      const started = mains.filter(r => r.actual_start).sort((a, b) => at(a).localeCompare(at(b)));
+      if (started.length) { bar.actual_start = started[0].actual_start; bar.actual_start_time = started[0].actual_start_time || null; }
+      const finished = mains.filter(r => r.actual_done).sort((a, b) => dn(b).localeCompare(dn(a)));
+      if (bar.status === "done" && finished.length) { bar.actual_done = finished[0].actual_done; bar.actual_done_time = finished[0].actual_done_time || null; }
+      const planned = spans.filter(sp => sp.est);
+      if (planned.length) { bar.planned_start = dayStr(Math.min(...planned.map(sp => sp.est[0]))); bar.planned_end = dayStr(Math.max(...planned.map(sp => sp.est[1]))); }
+      extra.push(bar);
+      if (showTodos) for (const r of mains) extra.push({ ...r, parent_id: bar.id, module: m.id });
+    });
+    return buildIndex([...state.items, ...extra]);
+  }
   function renderTimeline(idx) {
     const wrap = $("#tl-wrap");
+    const modules = state.projects.filter(p => p.parent_id === state.project);
+    $("#tl-show-wrap").hidden = !modules.length;
+    if (modules.length) idx = withModuleBars(idx, modules, state.showModuleTodos);
     const isDraft = x => statusOf(x) === "draft";
     const okId = new Set(idx.rows.filter(r => !isDraft(r.it) && !r.anc.some(a => isDraft(idx.byId.get(a) || {}))).map(r => r.it.id));
     const kidsOf = id => orderedKids(idx, id).filter(k => okId.has(k.id));
@@ -1760,6 +1862,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
         const clock = sp.timed && sp.start === sp.end ? (it.actual_start_time ? ` ${it.actual_start_time} to ${it.actual_done_time || "now"}` : ` to ${it.actual_done_time}`) : "";
         const took = sp.timed ? tookText(d) : (sp.kind === "actual" ? `${sp.end - sp.start + 1} d` : "");
         meta = [dates + clock + (sp.open ? " so far" : "") + (sp.kind === "auto" ? " (not set)" : ""), took, d.est !== null ? `est ${estText(d.est)}` : ""].filter(Boolean).join(" · ");
+        if (it.isModule) meta = `${it.moduleMain ? `${it.moduleDone} of ${it.moduleMain} done` : "no to-dos yet"}${meta ? " · " + meta : ""}`;
       } else {
         meta = [
           it.actual_start || it.actual_done ? rangeText(it.actual_start, it.actual_done, st === "doing" ? "today" : "") : (it.planned_start || it.planned_end ? "est " + rangeText(it.planned_start, it.planned_end) : ""),
@@ -1768,7 +1871,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       }
       const g = sp ? { actual: sp.kind === "actual" ? [sp.start, sp.end] : null, open: sp.open } : spans(it, today);
       const node = el("div", {
-        class: `gbox ${st}${b.depth === 0 ? " main" : ""}${sp && sp.kind === "auto" ? " auto" : ""}${currentId === it.id ? " current" : ""}`,
+        class: `gbox ${st}${b.depth === 0 ? " main" : ""}${sp && sp.kind === "auto" ? " auto" : ""}${currentId === it.id ? " current" : ""}${it.isModule ? " module" : ""}`,
         style: `left:${b.x}px;top:${b.y}px;width:${Math.max(36, b.w - GAP)}px;height:${BOX_H}px`, tabindex: "0", role: "button", title: tipText(it, g),
       }, el("div", { class: "gtitle", text: it.title || "Untitled" }), el("div", { class: "gmeta", text: meta }));
       let dragged = false;
@@ -1776,7 +1879,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       node.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDetails(it.id); } });
       // A main to-do can be dragged to any row with room for it; the row is kept and nothing else moves. One that has not started
       // can also be dragged along the days (its estimated dates move with it) or stretched at either end. (user, 2026-10-05)
-      if (b.depth === 0 && sp && !state.readOnly) {
+      if (b.depth === 0 && sp && !state.readOnly && !it.isModule) {
         const canMoveDays = sp.kind !== "actual";
         node.classList.add("movable");
         if (canMoveDays) node.append(el("span", { class: "grip left", "aria-hidden": "true" }), el("span", { class: "grip right", "aria-hidden": "true" }));
@@ -1855,11 +1958,15 @@ svg.tl { display: block; font-family: var(--font-ui); }
     // today in view when the page opens
     if (!state.tlScrolled) { state.tlScrolled = true; wrap.scrollLeft = Math.max(0, nowX() - wrap.clientWidth / 3); }
     const noDates = mainList.filter(sp => sp.kind === "auto").length;
-    $("#tl-counts").textContent = `${boxes.length} items · ${mains.length} main · ${noDates} without dates`;
+    $("#tl-counts").textContent = `${boxes.length} items · ${mains.length - modules.length} main${modules.length ? ` · ${modules.length} ${modules.length === 1 ? "module" : "modules"}` : ""} · ${noDates} without dates`;
   }
 
   // ---------- details: what a to-do is, read at a glance (the timeline opens this; the board opens the form) ----------
   function openDetails(id) {
+    // a module's bar opens the module's board; a module's to-do opens the module's timeline (shown here, kept there)
+    if (String(id).startsWith("module:")) { location.href = `/p/${encodeURIComponent(String(id).slice(7))}`; return; }
+    const away = (state.moduleItems || []).find(r => r.id === id);
+    if (away) { location.href = `/p/${encodeURIComponent(away.project_id)}/tree`; return; }
     const idx = index();
     const it = idx.byId.get(id);
     if (!it) { toast("That to-do is no longer in the store.", true); return; }
@@ -1967,6 +2074,11 @@ svg.tl { display: block; font-family: var(--font-ui); }
     F.parent.value = v.parent_id && idx.byId.has(v.parent_id) && (!it || v.parent_id !== it.id) ? v.parent_id : "";
     fillNextOptions(idx, F.parent.value || null, it ? it.id : null, v.next_id || null);
     const project = currentProject();
+    // where it can move: the project's modules, or from a module the project and the other modules (everything under it comes along)
+    const targets = it && project ? moveTargets() : [];
+    $("#ed-in-wrap").hidden = !targets.length;
+    $("#ed-in").replaceChildren(el("option", { value: project ? project.id : "", text: project ? `${project.name} (here)` : "" }), ...targets.map(t => el("option", { value: t.id, text: t.name + (t.id === project.parent_id ? " (the project)" : "") })));
+    $("#ed-in").value = project ? project.id : "";
     $("#ed-current-wrap").hidden = !it || !!F.parent.value || !project;
     const made = stampParts(it && it.created_at);
     $("#ed-created").hidden = !made.day;
@@ -2049,11 +2161,13 @@ svg.tl { display: block; font-family: var(--font-ui); }
       const project = currentProject();
       const wantCurrent = !$("#ed-current-wrap").hidden && $("#ed-current").checked && v.status !== "done";   // a finished to-do is never the current one
       const isCurrent = !!(project && project.current_id === before.id);
-      if (!Object.keys(patch).length && wantCurrent === isCurrent) { closeEditor(); return; }
+      const moveTo = !$("#ed-in-wrap").hidden && $("#ed-in").value && $("#ed-in").value !== state.project ? state.projects.find(x => x.id === $("#ed-in").value) : null;
+      if (!Object.keys(patch).length && wantCurrent === isCurrent && !moveTo) { closeEditor(); return; }
       let ok = true;
       if (Object.keys(patch).length) { patch.updated_at = stamp; ok = await write("Saving the to-do", () => state.db.collection(COL).doc(before.id).update(patch)); }
       if (ok && wantCurrent !== isCurrent) ok = await setCurrent(wantCurrent ? before.id : null);
-      if (ok) { closeEditor(); toast("Saved"); loadAll(); }
+      if (ok && moveTo) ok = await write(`Moving to ${moveTo.name}`, () => call("POST", `/api/todos/${encodeURIComponent(before.id)}/move`, { data: { project_id: moveTo.id } }));
+      if (ok) { closeEditor(); toast(moveTo ? `Moved to ${moveTo.name}` : "Saved"); loadAll(); }
     }
   });
   $("#ed-cancel").addEventListener("click", closeEditor);
@@ -2513,24 +2627,45 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function renderProjects() {
     const box = $("#project-cards");
     box.replaceChildren();
-    for (const p of state.projects) {
+    const STATUS_LABEL = { doing: "Current", todo: "Next", deferred: "Later", done: "Done" };
+    const moduleLine = m => {
+      const c = m.counts || {};
+      return el("a", { class: "module-line", href: `/p/${encodeURIComponent(m.id)}`, title: `Open the board of ${m.name}` },
+        el("span", { class: "name", text: m.name }),
+        el("span", { class: `chip status-${m.status || "todo"}`, text: STATUS_LABEL[m.status || "todo"] }),
+        state.readOnly ? null : el("button", { class: "icon-btn edit", type: "button", title: "Edit the module's name and description", "aria-label": `Edit ${m.name}`, onclick: e => { e.preventDefault(); e.stopPropagation(); openProjectModal(m); } }, "✎"),
+        el("span", { class: "sub", text: [c.main ? `${c.main_done || 0} of ${c.main} main done` : "no to-dos yet", m.current ? `current: ${m.current.title}` : ""].filter(Boolean).join(" · ") }));
+    };
+    for (const p of state.projects.filter(p => !p.parent_id)) {
       const c = p.counts || {};
-      box.append(el("a", { class: "project-card", href: `/p/${encodeURIComponent(p.id)}` },
+      const modules = state.projects.filter(m => m.parent_id === p.id);
+      const group = el("div", { class: "project-group" });
+      box.append(group);
+      group.append(el("a", { class: "project-card", href: `/p/${encodeURIComponent(p.id)}` },
         el("div", { class: "card-title", text: p.name }),
         state.readOnly ? null : el("button", { class: "icon-btn edit", type: "button", title: "Edit the project's name and description", "aria-label": `Edit ${p.name}`, onclick: e => { e.preventDefault(); e.stopPropagation(); openProjectModal(p); } }, "✎"),
         p.description ? el("div", { class: "notes", text: p.description }) : null,
         p.data_dir || p.docs_dir ? el("div", { class: "paths" }, p.data_dir ? el("div", { text: `data ${p.data_dir}` }) : null, p.docs_dir ? el("div", { text: `docs ${p.docs_dir}` }) : null) : null,
         el("div", { class: "meta" }, el("span", { text: `${c.main || 0} main` }), el("span", { text: `${c.doing || 0} now` }), el("span", { text: `${c.todo || 0} next` }), el("span", { text: `${c.done || 0} done` }), c.draft ? el("span", { text: `${c.draft} drafts` }) : null),
         p.current ? el("div", { class: "current-line" }, el("b", { text: "Current: " }), p.current.title) : null));
+      // the project's modules: each a board of its own (user, 2026-10-05: shown on the projects page only)
+      if (modules.length || !state.readOnly) group.append(el("div", { class: "modules" },
+        ...modules.map(moduleLine),
+        state.readOnly ? null : el("button", { class: "btn add-module", type: "button", title: `Add a module to ${p.name}`, onclick: () => openProjectModal(null, p.id) }, "+ Module")));
     }
+    const tops = state.projects.filter(p => !p.parent_id).length, mods = state.projects.length - tops;
     if (!state.projects.length) box.append(el("div", { class: "empty", text: state.loaded ? "No projects yet. Press New project." : "Loading…" }));
-    $("#projects-counts").textContent = state.projects.length ? `${state.projects.length} ${state.projects.length === 1 ? "project" : "projects"}` : "";
+    $("#projects-counts").textContent = tops ? `${tops} ${tops === 1 ? "project" : "projects"}${mods ? ` · ${mods} ${mods === 1 ? "module" : "modules"}` : ""}` : "";
   }
   // The same form makes a project and edits one: the heading and the button say which.
-  function openProjectModal(project) {
+  function openProjectModal(project, parentId) {
     state.editingProject = project ? project.id : null;
-    $("#pm-heading").textContent = project ? "Edit project" : "New project";
+    state.pmParent = project ? (project.parent_id || null) : (parentId || null);
+    const parent = state.pmParent ? state.projects.find(p => p.id === state.pmParent) : null;
+    $("#pm-heading").textContent = project ? (parent ? "Edit module" : "Edit project") : (parent ? `New module in ${parent.name}` : "New project");
     $("#pm-save").textContent = project ? "Save" : "Create";
+    $("#pm-data-help").textContent = parent ? "Empty uses the project's folder (its to-dos file)." : "Where this project's to-dos file lives (a todos.json inside it). Absolute, ~/…, or relative to the server's data folder. Empty keeps it in the server's own file.";
+    $("#pm-docs-help").textContent = parent ? "Empty uses the project's documents folder." : "The folder a to-do's Doc path is read from, and where an assistant writes plan documents. Empty uses the server's folder.";
     $("#pm-name").value = project ? project.name : "";
     $("#pm-desc").value = project ? (project.description || "") : "";
     $("#pm-data").value = project ? (project.data_dir || "") : "";
@@ -2555,7 +2690,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       if (ok) { $("#pm").hidden = true; toast("Saved"); loadAll(); }
       return;
     }
-    const ok = await write("Creating the project", async () => { const payload = await call("POST", "/api/projects", { data: { name, description, data_dir, docs_dir } }); location.href = `/p/${encodeURIComponent(payload.project.id)}`; });
+    const ok = await write(state.pmParent ? "Creating the module" : "Creating the project", async () => { const payload = await call("POST", "/api/projects", { data: { name, description, data_dir, docs_dir, parent_id: state.pmParent || null } }); location.href = `/p/${encodeURIComponent(payload.project.id)}`; });
     if (ok) $("#pm").hidden = true;
   });
 
@@ -2629,13 +2764,16 @@ svg.tl { display: block; font-family: var(--font-ui); }
   let loading = null;
   function loadAll() {
     if (loading) return loading;
-    loading = Promise.all([call("GET", "/api/projects"), state.project ? call("GET", `/api/todos?project=${encodeURIComponent(state.project)}`) : Promise.resolve({ todos: [] })]).then(([p, t]) => {
+    loading = Promise.all([call("GET", "/api/projects"), state.project ? call("GET", `/api/todos?project=${encodeURIComponent(state.project)}&modules=1`) : Promise.resolve({ todos: [] })]).then(([p, t]) => {
       state.projects = p.projects;
-      state.items = t.todos.map(x => ({ ...x }));
+      state.items = t.todos.filter(x => x.project_id === state.project).map(x => ({ ...x }));
+      state.moduleItems = t.todos.filter(x => x.project_id !== state.project).map(x => ({ ...x }));   // the rows of the project's modules, for the timeline's bars
       state.loaded = true;
       const project = currentProject();
-      $("#brand-sub").textContent = project ? project.name : "";   // the page links already say Projects
-      document.title = project ? `${project.name} · ProjectTodo` : "ProjectTodo";
+      const parent = project && project.parent_id ? state.projects.find(p => p.id === project.parent_id) : null;
+      if (parent) $("#brand-sub").replaceChildren(el("a", { class: "crumb", href: `/p/${encodeURIComponent(parent.id)}/tree`, title: `${parent.name}: its timeline, with the modules`, text: parent.name }), el("span", { class: "crumb-sep", text: " › " }), el("span", { text: project.name }));
+      else $("#brand-sub").textContent = project ? project.name : "";   // the page links already say Projects
+      document.title = project ? `${project.name}${parent ? ` · ${parent.name}` : ""} · ProjectTodo` : "ProjectTodo";
       if (state.project && !project) banner("There is no project with this id. Go back to the projects page.");
       render();
     }).catch(e => {
