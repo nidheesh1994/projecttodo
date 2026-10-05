@@ -1606,10 +1606,10 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const nowFrac = (() => { const d = new Date(); return (d.getHours() * 60 + d.getMinutes()) / 1440; })();
     for (const sp of mainList) {
       const f0 = sp.kind === "actual" ? fracOf(sp.it.actual_start_time) : null;
-      sp.timed = f0 !== null;
+      const ad = sp.kind === "actual" ? parseDay(sp.it.actual_done) : null, f1 = sp.kind === "actual" ? fracOf(sp.it.actual_done_time) : null;
+      sp.timed = f0 !== null || (ad !== null && f1 !== null);   // a start time, or an end time alone (started before times were kept)
       sp.t0 = sp.start + (f0 || 0);
       if (sp.timed) {
-        const ad = parseDay(sp.it.actual_done), f1 = fracOf(sp.it.actual_done_time);
         sp.t1 = ad !== null && f1 !== null ? ad + f1 : (sp.open ? Math.max(sp.t0, today + nowFrac) : sp.end + 1);
         if (sp.t1 <= sp.t0) sp.t1 = sp.t0 + 1 / 48;   // half an hour at the least
       } else sp.t1 = sp.end + 1;
@@ -1637,19 +1637,22 @@ svg.tl { display: block; font-family: var(--font-ui); }
       chartRight = Math.max(chartRight, x0 + w);
     }
     const fits = (list, px) => list.every(([a, b]) => px[1] <= a || px[0] >= b);   // a box ends a gap before its last day ends, so day-adjacent boxes share a row
-    const rows = [];
+    // Rows are one box tall. A main to-do takes as many rows as its tree is deep, only over its own days, so a box can sit
+    // under another box whose tree does not reach there. (user, 2026-10-05: "why can't I put this over there")
+    const TOP = AXIS_H + 12;
+    const rows = [];   // each: the pixel spans taken on that row
+    const roomAt = (r, px, h, self) => { for (let k = r; k < r + h; k++) if (rows[k] && !fits(self ? rows[k].spans.filter(x => x !== self) : rows[k].spans, px)) return false; return true; };
     for (const sp of mainList) {
+      const h = size.get(sp.it.id).h;
       const want = Number.isInteger(sp.it.row) && sp.it.row >= 0 ? sp.it.row : null;
-      let li = want !== null && (!rows[want] || fits(rows[want].spans, sp.px)) ? want : rows.findIndex(r => fits(r.spans, sp.px));
-      if (li < 0) li = rows.length;
-      while (rows.length <= li) rows.push({ spans: [], h: 1 });
-      rows[li].spans.push(sp.px);
-      rows[li].h = Math.max(rows[li].h, size.get(sp.it.id).h);
+      let li = want !== null && roomAt(want, sp.px, h) ? want : -1;
+      for (let r = 0; li < 0; r++) if (roomAt(r, sp.px, h)) li = r;
+      while (rows.length < li + h) rows.push({ spans: [] });
+      for (let k = li; k < li + h; k++) rows[k].spans.push(sp.px);
       sp.row = li;
+      sp.y = TOP + li * ROW_H;
     }
-    let y = AXIS_H + 12;
-    for (const r of rows) { r.y = y; y += r.h * ROW_H + 10; }
-    for (const sp of mainList) sp.y = rows[sp.row].y;
+    let y = TOP + rows.length * ROW_H;
     const height = y + FOOT, width = chartRight + PAD;
     const boxes = [];
     const placeTree = (id, x0, w, row, yTop, depth, sp) => {
@@ -1751,7 +1754,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       if (sp) {
         const dates = sp.start === sp.end ? fmtDay(dayStr(sp.start)) : `${fmtDay(dayStr(sp.start))} to ${fmtDay(dayStr(sp.end))}`;
         // a to-do with times on one day reads as its clock range and how long it took
-        const clock = sp.timed && sp.start === sp.end ? ` ${it.actual_start_time} to ${it.actual_done_time || "now"}` : "";
+        const clock = sp.timed && sp.start === sp.end ? (it.actual_start_time ? ` ${it.actual_start_time} to ${it.actual_done_time || "now"}` : ` to ${it.actual_done_time}`) : "";
         const took = sp.timed ? tookText(d) : (sp.kind === "actual" ? `${sp.end - sp.start + 1} d` : "");
         meta = [dates + clock + (sp.open ? " so far" : "") + (sp.kind === "auto" ? " (not set)" : ""), took, d.est !== null ? `est ${estText(d.est)}` : ""].filter(Boolean).join(" · ");
       } else {
@@ -1776,16 +1779,12 @@ svg.tl { display: block; font-family: var(--font-ui); }
         if (canMoveDays) node.append(el("span", { class: "grip left", "aria-hidden": "true" }), el("span", { class: "grip right", "aria-hidden": "true" }));
         const dayAtX = px => { for (let d = min; d <= max; d++) if (px < X.get(d) + (dayW.get(d) || MINDAY)) return d; return max; };
         const treeW = size.get(it.id).w * SLOT;
-        const rowH = r => r.h * ROW_H;
-        const others = r => r.spans.filter(x => x !== sp.px);
-        // the row a drop at this y (in the graph) lands in, or a new row under the last; null where it already is
+        const treeH = size.get(it.id).h;
+        // the row a drop at this y (in the graph) lands in (the box's tree needs that many rows under it); null where it already is
         const slotAt = (py, px) => {
-          let k = rows.findIndex(r => py < r.y + rowH(r) + 5);
-          if (k < 0) k = rows.length;
+          const k = Math.max(0, Math.min(rows.length, Math.floor((py - TOP) / ROW_H)));
           if (k === sp.row) return null;
-          const last = rows[rows.length - 1];
-          const ok = k >= rows.length || fits(others(rows[k]), px);
-          return { row: k, ok, y: k < rows.length ? rows[k].y : last.y + rowH(last) + 10, h: k < rows.length ? rowH(rows[k]) : ROW_H };
+          return { row: k, ok: roomAt(k, px, treeH, sp.px), y: TOP + k * ROW_H, h: treeH * ROW_H };
         };
         node.addEventListener("pointerdown", e => {
           if (e.button !== 0) return;
@@ -1821,7 +1820,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
               slot = Math.abs(dy) > 6 ? slotAt(ev.clientY - rect.top, px) : null;
               dragged = dragged || Math.abs(dy) > 3;
             }
-            room = slot ? slot.ok : fits(others(rows[sp.row]), px);
+            room = slot ? slot.ok : roomAt(sp.row, px, treeH, sp.px);
             band.hidden = !slot;
             if (slot) { band.style.top = `${slot.y}px`; band.style.height = `${slot.h}px`; band.classList.toggle("bad", !slot.ok); }
             node.classList.toggle("bad", !room);

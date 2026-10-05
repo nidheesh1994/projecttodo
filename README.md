@@ -35,8 +35,10 @@ to-dos you see.
   scroll into view.
 - **Timeline**: dates along the top. A main to-do (one without a parent) spans its days,
   and one with a start time begins at that time and ends at its end time or at now, kept
-  at least as wide as its tree needs. The boxes pack to the top in the board's order, all
-  lanes together, each in the first row with room for it. Drag a box to any row where nothing
+  at least as wide as its tree needs; one with only an end time ends at that time. The boxes
+  pack to the top in the board's order, all lanes together, each in the first row with
+  room for it; rows are one box tall and a tree takes several, so a box can sit under
+  another box whose tree does not reach there. Drag a box to any row where nothing
   is in its way (a band shows the row, red where there is no room) and it stays there; nothing
   else moves. A main to-do that has not started can also be dragged along the days to move
   its estimated dates, or stretched at either edge to change its estimated start or end;
