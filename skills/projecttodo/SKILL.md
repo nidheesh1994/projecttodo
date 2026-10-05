@@ -37,10 +37,11 @@ project, with everything under it), `set_current`, `add_draft`, `read_doc` and `
    end time, and leave it in Current until the person has looked at it and says it is
    done or to move on; then set status done with the real `actual_done` and
    `actual_done_time`. Keep working on that one thing until then.
-7. Not every ask is a to-do: a correction, a tweak or a small thing said while work is
-   going on belongs to the to-do in progress (do it, note it there). Make a new to-do
-   only when the ask is a task of its own, a task inside an existing one, or a draft
-   the person added.
+7. A to-do only when asked, or when the work is big. An instruction you can do now and
+   finish within minutes is simply done: do it, say what changed, and note it in the
+   to-do in progress when it corrects that work. Make a to-do only when the person asks
+   for one, adds it as a draft, or when the instruction is a big task that needs a plan
+   or steps of its own. Never a to-do for each and every instruction.
 8. After every change, say what changed in one short list. If a write is refused,
    quote the server's message; do not report it as done.
 

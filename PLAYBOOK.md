@@ -71,10 +71,12 @@ assistants, put one line in their instructions: *before working on the to-do boa
    that one thing until then. When they confirm, set `status: done` and pass the real
    end as `actual_done` and `actual_done_time` (note them when the work ends), so the
    record keeps when the work finished rather than when it was confirmed.
-8. **Not every ask is a to-do.** A correction, a tweak or a small thing the person says
-   while work is going on belongs to the to-do in progress: do it and note it there.
-   Make a new to-do only when the ask is a task of its own, or a task inside an
-   existing one, or when the person adds it as a draft.
+8. **A to-do only when asked, or when the work is big.** An instruction you can do now
+   and finish within minutes is simply done: do it, say what changed, and note it in the
+   to-do in progress when it corrects that work. Make a to-do only when the person asks
+   for one, when they add it as a draft, or when the instruction is a big task that needs
+   a plan or steps of its own; then a main to-do with children, and a document by the
+   usual rule. Never a to-do for each and every instruction.
 
 ## Session start
 
