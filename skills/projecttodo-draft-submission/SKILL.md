@@ -34,7 +34,9 @@ apply ("owner me", "after the marketplace work", "no document").
    when the group has three or more steps, when its estimate is half a day or more,
    when a decision has to be recorded, or when the person asked for one; skip it for a
    small fix with one obvious step. When written, use `write_doc` with the playbook's
-   template, and put the path in the group's `doc`.
+   template, and put the path in the group's `doc`. Keep it as short as it can be
+   while still clear, longer when the work needs it; a child gets a document of its own
+   only when it is big, otherwise its notes, with the explanation in the group's plan.
 5. Set the group's `owner`, `estimate_days` (your proposal, say it is one), and
    `status: todo`; `set_current` only when the argument says to start it now. Keep it
    after the main to-do before it unless the argument says where it goes.

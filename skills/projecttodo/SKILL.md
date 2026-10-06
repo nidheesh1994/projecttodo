@@ -31,9 +31,13 @@ project, with everything under it), `set_current`, `add_draft`, `read_doc` and `
 5. Plan documents are markdown files written with `write_doc` and linked through the
    to-do's `doc` field; `read_doc` reads them back. Pass `project_id` to both: each
    project can have its own documents folder (`list_projects` shows it under `paths`). Keep the document's Plan checklist
-   and the child to-dos in step.
-6. Start a to-do (status doing) the moment you begin it; the server stamps the date and
-   time. Never set it done on your own: when your part is finished, say so, note the
+   and the child to-dos in step. A document is as short as it can be while still
+   clear, longer when the work needs it; a child gets one of its own only when it is
+   big, otherwise its notes, with the explanation in the parent's plan; rewrite it when
+   the plan changes a lot, else a final update at the end records what changed.
+6. Touch the board at the start of a task, when the plan changes, and at the end; the
+   work itself gets the attention. Start a to-do (status doing) when you begin it, a
+   child when it helps the person follow along; the server stamps the date and time. Never set it done on your own: when your part is finished, say so, note the
    end time, and leave it in Current until the person has looked at it and says it is
    done or to move on; then set status done with the real `actual_done` and
    `actual_done_time`. Keep working on that one thing until then.

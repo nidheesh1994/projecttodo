@@ -121,6 +121,19 @@ steps; its estimate is half a day or more; a decision has to be recorded; the pe
 asked for one. Skip it for a small fix with one obvious step, and say that you skipped it.
 Put the path in the to-do's `doc` so the board can open it.
 
+**How long.** As short as it can be while still saying clearly what to do and why;
+longer when the work needs more explanation. Context holds the person's words and the
+answers that shaped the plan; the Plan is a checklist, one line per step, with the
+explanation a step needs under it; a decision is a line with its date. What the
+to-do's notes already say is not repeated.
+
+**Children.** A child gets a document of its own only when it is big or truly needs a
+separate plan; otherwise its notes carry what is specific to it, and the explanation
+lives in the parent's plan.
+
+**When it is updated.** When the plan changes a lot in the middle, rewrite it then;
+otherwise a final update at the end records what changed and what was added.
+
 ## Planning a to-do
 
 When a to-do needs a plan (any main to-do; a child when it is big):
@@ -135,14 +148,18 @@ When a to-do needs a plan (any main to-do; a child when it is big):
 
 ## While work happens
 
-- Starting a main to-do: `set_current`. Starting a child: `status: doing`; the server
-  stamps `actual_start` and its time, and gives its parents the same start if they had
-  none. Do it the moment the work starts, not after.
+- The board is touched when it tells the person something: at the start of a task,
+  when the plan changes, and at the end. The work itself gets the attention.
+- Starting a main to-do: `set_current`. Starting a child: `status: doing` when it helps
+  the person follow along; the server stamps `actual_start` and its time, and gives its
+  parents the same start if they had none. Stamp it when the work starts, not after.
 - Finishing a child: when your part is done, say so and note the time; set
   `status: done` only when the person confirms (rule 7), passing `actual_done` and
   `actual_done_time` from your note so the record keeps the real end. Add a dated
   line to the document's **Progress** section when something notable happened (a
-  decision, a surprise, a change of estimate).
+  decision, a surprise, a change of estimate). Notes say what was built and checked,
+  written when the work ends, or updated in between when something changed that the
+  person should see.
 - Finishing a main to-do: only after every child is done and the person has confirmed
   the whole; then `status: done` with the real `actual_done` and its time.
 - Blocked or postponed: `deferred`, and a Progress line that says why and what would
