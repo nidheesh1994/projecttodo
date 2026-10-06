@@ -513,6 +513,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
 .tl .lbl { font-weight: 500; }
 .tl .lbl.dull { fill: var(--muted); font-weight: 400; }
 .tl .days { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; font-weight: 400; }
+.tl .dow { fill: var(--muted); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; }
 .tl .today-line { stroke: var(--today); stroke-dasharray: 3 3; stroke-width: 1.5; }
 .tl .today-lbl { fill: var(--today); font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
 .tl .now-hit rect { fill: transparent; pointer-events: all; }
@@ -1707,7 +1708,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     // a day under a main to-do is as wide as its share of the tree needs
     const z = state.tlZoom || 1;   // zoom scales the days and the columns; the rows keep their height
     const compact = document.documentElement.dataset.layout === "compact";   // the Compact layout draws smaller boxes and days
-    const SLOT = Math.round((compact ? 124 : 156) * z), MINDAY = Math.round((compact ? 24 : 30) * z), BOX_H = compact ? 38 : 42, ROW_H = compact ? 56 : 62, GAP = 8, AXIS_H = compact ? 42 : 48, PAD = 16, FOOT = 22;
+    const SLOT = Math.round((compact ? 124 : 156) * z), MINDAY = Math.round((compact ? 24 : 30) * z), BOX_H = compact ? 38 : 42, ROW_H = compact ? 56 : 62, GAP = 8, AXIS_H = compact ? 52 : 58, PAD = 16, FOOT = 22;
     // Where a main to-do sits within its days: a to-do with a start time runs from that time to its end time (or to now while it
     // runs), as fractions of a day; the others cover whole days. (user, 2026-10-04: boxes start at their actual start)
     const fracOf = t => { const m = parseTime(t); return m === null ? null : m / 1440; };
@@ -1798,7 +1799,11 @@ svg.tl { display: block; font-family: var(--font-ui); }
       const dt = dayDate(d), x0 = X.get(d), w = dayW.get(d);
       axis.append(svgEl("line", { class: "grid", x1: x0, y1: AXIS_H - 6, x2: x0, y2: height - FOOT }));
       const dayN = dt.getUTCDate();
-      if (w >= 22 || dayN % 2 === 1) axis.append(svgText(x0 + w / 2, AXIS_H - 12, String(dayN), { "text-anchor": "middle" }));
+      // the weekday's first letter above the day number (user, 2026-10-06)
+      if (w >= 22 || dayN % 2 === 1) {
+        axis.append(svgText(x0 + w / 2, AXIS_H - 25, "SMTWTFS"[dt.getUTCDay()], { class: "dow", "text-anchor": "middle" }));
+        axis.append(svgText(x0 + w / 2, AXIS_H - 10, String(dayN), { "text-anchor": "middle" }));
+      }
       if (d === min || dayN === 1) axis.append(svgText(x0 + 4, 16, fmtMonth.format(dt), { class: "month" }));
     }
     axis.append(svgEl("line", { class: "grid", x1: PAD, y1: AXIS_H, x2: chartRight, y2: AXIS_H }));
