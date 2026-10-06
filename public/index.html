@@ -1700,7 +1700,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     let min = today, max = today;
     // the chart's columns
     for (const sp of mainList) { min = Math.min(min, sp.start, sp.est ? sp.est[0] : sp.start); max = Math.max(max, sp.end, sp.est ? sp.est[1] : sp.end); }
-    min -= 1; max += 2;
+    min -= 1; max += 7;   // a week of empty days after the last one, to drag estimates into (user, 2026-10-06)
     // how many columns wide and rows tall each tree is: siblings side by side, children below
     const size = new Map();
     const measure = id => { let w = 0, h = 0; for (const k of kidsOf(id)) { const sz = measure(k.id); w += sz.w; h = Math.max(h, sz.h); } const out = { w: Math.max(1, w), h: 1 + h }; size.set(id, out); return out; };
