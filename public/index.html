@@ -2240,7 +2240,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     sel.addRange(range);
   }
   const dm = { lines: [], groupId: null, parentId: null, focus: { index: 0, caret: 0 }, seq: 1 };
-  const dmLine = (text = "", depth = 0, id = null) => ({ key: `l${dm.seq++}`, id, text, depth });
+  const dmLine = (text = "", depth = 0, id = null, done = false) => ({ key: `l${dm.seq++}`, id, text, depth, done });
   const nextOrderOf = sibs => (sibs.length ? Math.max(0, ...sibs.map(s => (Number.isFinite(+s.order) ? +s.order : 0))) + 10 : 10);
   function openDraftModal({ groupId = null, parentId = null } = {}) {
     const idx = index();
@@ -2250,7 +2250,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     dm.lines = [];
     if (group) {
       const base = idx.rows.find(r => r.it.id === group.id);
-      for (const r of idx.rows.filter(r => r.anc.includes(group.id))) dm.lines.push(dmLine(r.it.title || "", Math.max(0, r.depth - base.depth - 1), r.it.id));
+      for (const r of idx.rows.filter(r => r.anc.includes(group.id))) dm.lines.push(dmLine(r.it.title || "", Math.max(0, r.depth - base.depth - 1), r.it.id, statusOf(r.it) === "done"));
     }
     if (!dm.lines.length) dm.lines.push(dmLine());
     dm.under = !group && !!dm.parentId;   // adding under a to-do: no title, the lines become its children
@@ -2285,7 +2285,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       const ctl = el("span", { class: "dm-ctl", contenteditable: "false" },
         el("button", { class: "icon-btn", type: "button", tabindex: "-1", title: "A level out", "aria-label": "A level out", onmousedown: e => e.preventDefault(), onclick: () => { syncLines(); shiftLine(i, -1); } }, "‹"),
         el("button", { class: "icon-btn", type: "button", tabindex: "-1", title: "A level in", "aria-label": "A level in", onmousedown: e => e.preventDefault(), onclick: () => { syncLines(); shiftLine(i, 1); } }, "›"));
-      list.append(el("div", { class: "note-line", style: `margin-left:${line.depth * 22}px` }, el("span", { class: "note-check static", contenteditable: "false", "aria-hidden": "true" }), el("div", { class: "note-main" }, body), ctl));
+      list.append(el("div", { class: `note-line${line.done ? " done" : ""}`, style: `margin-left:${line.depth * 22}px` }, el("span", { class: `note-check static${line.done ? " on" : ""}`, contenteditable: "false", "aria-hidden": "true" }, line.done ? "✓" : ""), el("div", { class: "note-main" }, body), ctl));
     });
     if (keepFocus) focusLine(dm.focus.index, dm.focus.caret);
   }
