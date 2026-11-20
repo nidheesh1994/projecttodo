@@ -9,6 +9,7 @@
 //   PROJECTTODO_DOCS_DIR       the folder a to-do's `doc` path is read from (default: the data dir's parent)
 //   PROJECTTODO_DOC_WRITE_DIR  where the write_doc tool may create markdown files, inside the docs folder (default: todos)
 //   PROJECTTODO_DEFAULT_PROJECT  the name of the project made for rows from before projects existed
+//   PROJECTTODO_CLAUDE_DIR     Claude Code's folder (~/.claude): the dashboard lists its sessions of the last day (off when unset)
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -36,7 +37,7 @@ const PUBLIC = path.join(ROOT, "public");
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 3004);
 const STATUSES = new Set(["draft", "todo", "doing", "done", "deferred"]);
-const TODO_KEYS = new Set(["id", "project_id", "title", "notes", "parent_id", "next_id", "order", "status", "owner", "doc", "docs", "row", "estimate_days", "planned_start", "planned_end", "actual_start", "actual_start_time", "actual_done", "actual_done_time", "created_at", "updated_at", "version"]);
+const TODO_KEYS = new Set(["id", "project_id", "title", "notes", "parent_id", "next_id", "order", "status", "owner", "doc", "docs", "row", "estimate_days", "planned_start", "planned_end", "actual_start", "actual_start_time", "actual_done", "actual_done_time", "remind_at", "reminded_at", "created_at", "updated_at", "version"]);
 const OWNERS = new Set(["user", "assistant", "both"]);
 const BOARD_ORDER = ["draft", "doing", "todo", "done", "deferred"];
 // A project's board columns: their order and a colour each, as the person set them on the board page.
@@ -70,7 +71,7 @@ const clients = new Set();
 async function load() {
   try {
     const parsed = JSON.parse(await fs.readFile(DATA, "utf8"));
-    store = { revision: Number(parsed.revision) || 0, projects: Array.isArray(parsed.projects) ? parsed.projects : [], todos: Array.isArray(parsed.todos) ? parsed.todos : [] };
+    store = { revision: Number(parsed.revision) || 0, projects: Array.isArray(parsed.projects) ? parsed.projects : [], todos: Array.isArray(parsed.todos) ? parsed.todos : [], limits: parsed.limits || null, journal: parsed.journal || null };
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
     await fs.mkdir(DATA_DIR, { recursive: true });
@@ -98,7 +99,7 @@ async function load() {
     changed = true;
   }
   for (const row of store.todos) {
-    if (!row.project_id && store.projects[0]) { row.project_id = store.projects[0].id; changed = true; }
+    if (!row.project_id && !row.remind_at && store.projects[0]) { row.project_id = store.projects[0].id; changed = true; }
     if (row.owner === "claude") { row.owner = "assistant"; changed = true; }
   }
   if (changed || !(await exists(DATA))) await persist();
@@ -126,7 +127,7 @@ async function persist() {
   for (const dir of retiredDirs) if (!own.has(dir)) own.set(dir, []);
   const mainRows = [];
   for (const row of store.todos) { const dir = dataDirOf(findProject(row.project_id)); if (dir) own.get(dir).push(row); else mainRows.push(row); }
-  await writeJson(DATA, { revision: store.revision, projects: store.projects, todos: mainRows });
+  await writeJson(DATA, { revision: store.revision, projects: store.projects, todos: mainRows, ...(store.limits ? { limits: store.limits } : {}), ...(store.journal ? { journal: store.journal } : {}) });
   for (const [dir, rows] of own) { await fs.mkdir(dir, { recursive: true }); await writeJson(path.join(dir, "todos.json"), { revision: store.revision, todos: rows }); }
   retiredDirs.clear();
 }
@@ -191,7 +192,9 @@ function cleanTodo(data, { creating } = {}) {
     if (!/^[A-Za-z0-9_.:+@~-]{1,120}$/.test(id)) throw new HttpError(400, "invalid_argument", "An id is required: letters, digits, dashes, dots or underscores.");
     row.id = id;
     if (!String(row.title || "").trim() && row.status !== "draft") throw new HttpError(400, "invalid_argument", "A title is required (only a draft may leave it empty).");
-    if (!row.project_id || !findProject(String(row.project_id))) throw new HttpError(400, "invalid_argument", "A to-do belongs to a project: give an existing project_id.");
+    // a reminder of its own (a time, no project) is the one to-do that belongs to no project; the dashboard lists it
+    if (row.project_id == null && row.remind_at) row.project_id = null;
+    else if (!row.project_id || !findProject(String(row.project_id))) throw new HttpError(400, "invalid_argument", "A to-do belongs to a project: give an existing project_id (only a reminder may go without one).");
   } else {
     delete row.id;
     if ("project_id" in row && !findProject(String(row.project_id))) throw new HttpError(400, "invalid_argument", "There is no project with that id.");
@@ -200,6 +203,7 @@ function cleanTodo(data, { creating } = {}) {
   if ("owner" in row && row.owner !== null && !OWNERS.has(row.owner)) throw new HttpError(400, "invalid_argument", "The owner must be user, assistant, both or null.");
   for (const key of ["planned_start", "planned_end", "actual_start", "actual_done"]) if (key in row && !isDay(row[key])) throw new HttpError(400, "invalid_argument", `${key} must be a date as YYYY-MM-DD, or null.`);
   if ("row" in row && row.row !== null && !(Number.isInteger(row.row) && row.row >= 0)) throw new HttpError(400, "invalid_argument", "row is a whole number from 0 (the timeline row a main to-do sits in), or null.");
+  if ("remind_at" in row && row.remind_at !== null && !/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/.test(String(row.remind_at))) throw new HttpError(400, "invalid_argument", "remind_at is a local date and time as YYYY-MM-DDTHH:MM, or null.");
   for (const key of ["actual_start_time", "actual_done_time"]) if (key in row && !isTime(row[key])) throw new HttpError(400, "invalid_argument", `${key} must be a time of day as HH:MM (24-hour), or null.`);
   if ("docs" in row && row.docs !== null) {
     if (!Array.isArray(row.docs) || row.docs.some(d => typeof d !== "string")) throw new HttpError(400, "invalid_argument", "docs is a list of paths, or null.");
@@ -237,12 +241,14 @@ function plan(write) {
     if (Number(write.if_version) !== existing.version) throw new HttpError(409, "version_mismatch", "This to-do was changed meanwhile; it was reloaded.", { version: existing.version });
     if (op === "delete") return () => { store.todos.splice(store.todos.indexOf(existing), 1); for (const p of store.projects) if (p.current_id === id) p.current_id = null; return { id, deleted: true }; };
     const patch = cleanTodo(write.data);
+    if (existing.project_id == null && "remind_at" in patch && patch.remind_at === null) throw new HttpError(400, "invalid_argument", "A reminder of its own cannot lose its time: delete it instead.");
     const nextTitle = "title" in patch ? patch.title : existing.title, nextStatus = "status" in patch ? patch.status : existing.status;
     const nextDoc = "doc" in patch ? patch.doc : existing.doc, nextDocs = "docs" in patch ? patch.docs : existing.docs;
     if (Array.isArray(nextDocs) && nextDoc && nextDocs.includes(nextDoc)) patch.docs = nextDocs.filter(d => d !== nextDoc).length ? nextDocs.filter(d => d !== nextDoc) : null;
     if (nextStatus !== "draft" && !String(nextTitle || "").trim()) throw new HttpError(400, "invalid_argument", "A to-do needs a title before it leaves Drafts.");
     return () => {
       const next = { ...existing, ...stampTimes(existing, patch), version: existing.version + 1 };
+      if ("remind_at" in patch && patch.remind_at !== (existing.remind_at || null)) next.reminded_at = null;   // a new time arms it again
       // a to-do that has just finished goes above its finished siblings: the latest done sits at the top (the person can move it later)
       if (next.status === "done" && existing.status !== "done" && !("order" in patch)) {
         const doneSibs = store.todos.filter(r => r.id !== existing.id && r.project_id === existing.project_id && (r.parent_id || null) === (next.parent_id || null) && r.status === "done");
@@ -418,6 +424,72 @@ async function moveTodo(id, projectId, ifVersion) {
   });
 }
 
+// Reminders: the server is the clock. A due one goes to the open pages on every tick until one of them says it showed the
+// notification (it sets reminded_at). The server does not mark it sent itself: a page that cannot show notifications, or
+// no page at all, must not count as told. (user, 2026-11-20: it reached a page, never the screen)
+async function fireReminders() {
+  if (!clients.size) return;
+  const due = store.todos.filter(r => r.remind_at && !r.reminded_at && r.status !== "done" && new Date(r.remind_at).getTime() <= Date.now());
+  if (!due.length) return;
+  const payload = `event: reminder\ndata: ${JSON.stringify(due.map(r => ({ id: r.id, version: r.version, title: r.title, project_id: r.project_id, project: (findProject(r.project_id) || {}).name || "", remind_at: r.remind_at })))}\n\n`;
+  for (const client of clients) client.write(payload);
+}
+setInterval(() => fireReminders().catch(console.error), 30000).unref();
+
+// The Claude Code sessions of the last day, newest first, read from the tails of the transcripts it keeps
+// (<dir>/projects/<folder>/<session>.jsonl). Off unless PROJECTTODO_CLAUDE_DIR is set, since titles and prompts are shown.
+const CLAUDE_DIR = process.env.PROJECTTODO_CLAUDE_DIR ? resolveDir(process.env.PROJECTTODO_CLAUDE_DIR) : null;
+// The branch a repository folder is on now, from .git/HEAD (a short commit id when detached); null for a folder that is none.
+async function branchOf(dir) {
+  const t = (await fs.readFile(path.join(dir, ".git", "HEAD"), "utf8").catch(() => "")).trim(), m = t.match(/^ref: refs\/heads\/(.+)/);
+  return m ? m[1] : (t ? t.slice(0, 7) : null);
+}
+// Runs of scheduled tasks are left out of the list: a task that runs every few minutes would crowd out the person's own
+// sessions. Claude Code marks such a run on its first prompt, near the start of the file; a file is looked at once.
+const scheduledRun = new Map();
+async function isScheduledRun(file) {
+  if (!scheduledRun.has(file)) {
+    const fh = await fs.open(file);
+    const { buffer, bytesRead } = await fh.read(Buffer.alloc(65536), 0, 65536, 0).finally(() => fh.close());
+    scheduledRun.set(file, buffer.subarray(0, bytesRead).includes('"turnOrigin":"scheduled"'));
+  }
+  return scheduledRun.get(file);
+}
+async function claudeSessions() {
+  if (!CLAUDE_DIR) return null;
+  const root = path.join(CLAUDE_DIR, "projects"), files = [];
+  for (const dir of await fs.readdir(root).catch(() => [])) {
+    for (const name of await fs.readdir(path.join(root, dir)).catch(() => [])) {
+      if (!name.endsWith(".jsonl")) continue;
+      const file = path.join(root, dir, name), st = await fs.stat(file).catch(() => null);
+      if (st && Date.now() - st.mtimeMs < 864e5) files.push({ file, at: st.mtimeMs, size: st.size });
+    }
+  }
+  files.sort((a, b) => b.at - a.at);
+  const shown = [];
+  for (const f of files) { if (shown.length === 12) break; if (!(await isScheduledRun(f.file))) shown.push(f); }
+  return Promise.all(shown.map(async ({ file, at, size }) => {
+    const len = Math.min(size, 131072);   // shortcut: only the last 128 KB is read; a title written before that shows as the last prompt instead
+    const fh = await fs.open(file);
+    const { buffer, bytesRead } = await fh.read(Buffer.alloc(len), 0, len, size - len).finally(() => fh.close());
+    const s = { id: path.basename(file, ".jsonl"), at: new Date(at).toISOString(), folder: null, branch: null, title: null, prompt: null };
+    let custom = null, cwd = null;
+    for (const line of buffer.subarray(0, bytesRead).toString("utf8").split("\n")) {
+      let o; try { o = JSON.parse(line); } catch { continue; }
+      if (o.cwd) { cwd = o.cwd; s.folder = path.basename(cwd); }
+      if (o.gitBranch) s.branch = o.gitBranch;
+      if (o.customTitle) custom = o.customTitle;
+      if (o.aiTitle) s.title = o.aiTitle;
+      if (typeof o.lastPrompt === "string") s.prompt = o.lastPrompt.slice(0, 200);
+    }
+    if (custom) s.title = custom;   // a name the person gave wins over the generated one
+    // Claude Code records "HEAD" when the session started in a folder that is no repository (one that holds several, say) and
+    // keeps it after moving into one: read the branch of the folder it works in, and show none when that is no repository either
+    if (cwd && (!s.branch || s.branch === "HEAD")) s.branch = await branchOf(cwd);
+    return s;
+  }));
+}
+
 async function deleteProject(id, ifVersion) {
   return serial(async () => {
     const project = findProject(id);
@@ -491,6 +563,7 @@ const TODO_FIELDS = {
   owner: { type: ["string", "null"], enum: [...OWNERS, null] }, doc: { type: ["string", "null"], description: "The plan document: a markdown file, relative to the project's docs folder." }, docs: { type: ["array", "null"], items: { type: "string" }, description: "Further documents, as many as needed: paths relative to the project's docs folder." },
   estimate_days: { type: ["number", "null"], description: "Size in days; fractions are hours at 8 hours a day (0.375 = 3 h)." }, planned_start: { type: ["string", "null"], description: "Estimated start, YYYY-MM-DD." }, planned_end: { type: ["string", "null"], description: "Estimated end, YYYY-MM-DD." },
   actual_start: { type: ["string", "null"], description: "YYYY-MM-DD. Setting it to today without a time stamps the time now." }, actual_start_time: { type: ["string", "null"], description: "HH:MM, 24-hour local time; filled by the server when a status change stamps the date." },
+  remind_at: { type: ["string", "null"], description: "A reminder: local date and time, YYYY-MM-DDTHH:MM. The person's browser shows a notification then; null clears it." },
   actual_done: { type: ["string", "null"], description: "Actual end, YYYY-MM-DD." }, actual_done_time: { type: ["string", "null"], description: "HH:MM, 24-hour local time." }, order: { type: "number", description: "Position among siblings; 10, 20, 30 …" },
   row: { type: ["integer", "null"], description: "The timeline row a main to-do was dropped in (0 = top); null = the first row with room. Set by the person on the timeline; leave it alone." },
 };
@@ -743,11 +816,39 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { revision: store.revision, deleted: decodeURIComponent(one[1]) });
     }
     if (pathname === "/api/batch" && req.method === "POST") { const body = await readBody(req); const results = await applyWrites(body.writes); return send(res, 200, { revision: store.revision, results }); }
+    if (pathname === "/api/claude" && req.method === "GET") return send(res, 200, { sessions: await claudeSessions(), limits: store.limits || null, journal: store.journal || null });
+    // A journal an agent keeps from the Claude sessions: per day, a few lines of what was worked on in each project. A post
+    // replaces that day ({day, entries: [{project_id, text}]}); the dashboard's This week shows the lines. 60 days are kept.
+    if (pathname === "/api/journal" && req.method === "POST") {
+      const body = await readBody(req);
+      if (typeof body.day !== "string" || !isDay(body.day)) throw new HttpError(400, "invalid_argument", "Give day as YYYY-MM-DD.");
+      const entries = (Array.isArray(body.entries) ? body.entries : []).slice(0, 30)
+        .map(e => ({ project_id: String((e && e.project_id) || ""), text: String((e && e.text) || "").trim().slice(0, 200) }))
+        .filter(e => e.text && findProject(e.project_id));
+      await serial(async () => {
+        const all = { ...(store.journal || {}), [body.day]: entries };
+        if (!entries.length) delete all[body.day];
+        store.journal = Object.fromEntries(Object.entries(all).sort().slice(-60));
+        await commit();
+      });
+      return send(res, 200, { day: body.day, entries });
+    }
+    // The plan limits cannot be read from disk: a Claude session reads them and posts them here ({plan, windows: [{label, percentUsed, resetsAt}]}).
+    if (pathname === "/api/claude/limits" && req.method === "POST") {
+      const body = await readBody(req);
+      const windows = (Array.isArray(body.windows) ? body.windows : []).slice(0, 8)
+        .map(w => ({ label: String((w && w.label) || "").slice(0, 60), percentUsed: Number(w && w.percentUsed), resetsAt: w && w.resetsAt ? String(w.resetsAt).slice(0, 40) : null }))
+        .filter(w => w.label && Number.isFinite(w.percentUsed));
+      if (!windows.length) throw new HttpError(400, "invalid_argument", "Give windows: [{label, percentUsed, resetsAt}].");
+      await serial(async () => { store.limits = { at: new Date().toISOString(), plan: body.plan ? String(body.plan).slice(0, 40) : null, windows }; await commit(); });
+      return send(res, 200, { limits: store.limits });
+    }
     if (pathname === "/api/doc" && req.method === "GET") return send(res, 200, await readDoc(url.searchParams.get("path"), url.searchParams.get("project") || undefined));
     if (pathname === "/api/events" && req.method === "GET") {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" });
       res.write(`retry: 1000\nevent: change\ndata: ${JSON.stringify({ revision: store.revision, boot: BOOT })}\n\n`);
       clients.add(res);
+      fireReminders().catch(console.error);   // what came due while no page was open
       const beat = setInterval(() => res.write(": keep-alive\n\n"), 25000);
       req.on("close", () => { clearInterval(beat); clients.delete(res); });
       return;
@@ -762,8 +863,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (pathname.startsWith("/api/")) throw new HttpError(404, "not_found", "No such route.");
     if (req.method !== "GET" && req.method !== "HEAD") throw new HttpError(405, "method_not_allowed", "Only GET here.");
-    // One page: the projects at /, a project's board at /p/<id>, its timeline at /p/<id>/tree.
-    return await serveStatic(res, /^\/p\/[^/]+(\/tree)?\/?$/.test(pathname) ? "/" : pathname);
+    // One page: the dashboard at /, the projects at /projects, a project's board at /p/<id>, its timeline at /p/<id>/tree.
+    return await serveStatic(res, /^\/(projects|p\/[^/]+(\/tree)?)\/?$/.test(pathname) ? "/" : pathname);
   } catch (error) {
     if (error instanceof HttpError) return send(res, error.status, { code: error.code, message: error.message, ...error.extra });
     console.error(error);

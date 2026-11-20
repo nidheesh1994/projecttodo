@@ -7,7 +7,27 @@ to-dos you see.
 
 ![The board: Drafts, Current and Next, with Done and Later off to the right](docs/screenshots/board.png)
 
-- **Projects** on the first page, each a card. Open one for its board; the pencil on a card
+- **Dashboard** is the first page (`/`): the date, then cards. **This week** shows the main
+  to-dos of one project (pick it; its modules count too) that finished since Monday or are
+  in progress, for a weekly meeting, and under them the lines an agent logged from your
+  Claude sessions (`POST /api/journal`). **Projects** lists the projects, each row straight
+  to its board; its heading opens the projects page (`/projects`). **Reminders** lists
+  them, and with `PROJECTTODO_CLAUDE_DIR` set the Claude
+  Code sessions of the last day (title, folder, branch, how long ago; the last prompt on
+  hover), read from the files Claude Code keeps. It is off by default because it shows
+  your prompts. A Claude limits box shows the plan limits a Claude session last posted to
+  `POST /api/claude/limits`; they are not on disk, so something has to post them.
+- **Reminders**: press the bell in the header of a to-do's view or of a draft's pad, or +
+  on the dashboard's Reminders card for a reminder of its own, tied to no project (its ✓
+  removes it). One dialog serves them all: the time is set on a clock (drag a hand or click
+  the face, or type it), with Remove and Cancel. The editor has the field too. A due reminder has a Snooze menu
+  (10 minutes, 1 hour, 1 day). The dashboard's top row carries a running clock. When it is due, an open
+  ProjectTodo tab shows a browser notification that stays until dismissed (allow them
+  once; the Reminders card has the button). The server
+  keeps the time and keeps sending a due reminder until a tab says it showed the
+  notification, so one that came due with no tab open, or only a tab that may not notify,
+  still shows later. A tab has to be open for a notification to appear.
+- **Projects** on their own page (`/projects`), each a card. Open one for its board; the pencil on a card
   edits its name, description and folders. A project can keep its to-dos in a folder of
   its own (`todos.json` inside it, so a repository can commit its own rows) and read and
   write its documents in its own folder; both are asked for when the project is made and
@@ -128,6 +148,7 @@ restarts by hand:
 | `PROJECTTODO_DOCS_DIR` | the data dir's parent | a to-do's `doc` is a markdown file under this folder, shown in a drawer |
 | `PROJECTTODO_DOC_WRITE_DIR` | `todos` (inside the docs dir) | where the assistant's `write_doc` may create markdown files (`--write-docs`) |
 | `PROJECTTODO_DEFAULT_PROJECT` | `My project` | the project made for rows from before projects existed |
+| `PROJECTTODO_CLAUDE_DIR` | unset | Claude Code's folder (`~/.claude`); set it and the dashboard lists its sessions (`--claude DIR`) |
 | `PROJECTTODO_DEV` | unset | `1` watches the files and restarts (the `--dev` flag) |
 
 ## Connect your assistant (MCP)
@@ -212,6 +233,9 @@ with room), status: draft | todo (Next) | doing (Current) | done | deferred (Lat
 owner: user | assistant | both | null, doc (the plan), docs (further files, a list), estimate_days,
 planned_start, planned_end (estimated start and end), actual_start, actual_done (actual start and end),
 actual_start_time, actual_done_time (HH:MM, local; stamped by the server with the dates),
+remind_at (a reminder, local YYYY-MM-DDTHH:MM; a to-do with one may have project_id null: a
+reminder of its own), reminded_at (set by the server when it was sent;
+cleared when remind_at changes),
 created_at (when it was added; the details view and the editor show it as Created), updated_at (ISO 8601),
 version (kept by the server)
 ```
@@ -248,7 +272,10 @@ estimate in days (one day if none). Deleting a parent moves its children up one 
 | `DELETE /api/todos/{id}` | `{if_version}` | removes a row |
 | `POST /api/batch` | `{writes: [{op: set\|update\|delete, id, data, if_version}]}` | all or nothing |
 | `GET /api/doc?path=docs/x.md` | | `{path, modified, content}` for a markdown file under the docs folder |
-| `GET /api/events` | | server-sent `change` events |
+| `GET /api/events` | | server-sent `change` events, and `reminder` events with the to-dos that came due |
+| `GET /api/claude` | | `{sessions, limits}`: Claude Code sessions of the last day (`null` when `PROJECTTODO_CLAUDE_DIR` is unset) and the last posted limits |
+| `POST /api/journal` | `{day, entries: [{project_id, text}]}` | replaces that day's journal lines (what was worked on, per project); read back in `GET /api/claude` as `journal` |
+| `POST /api/claude/limits` | `{plan, windows: [{label, percentUsed, resetsAt}]}` | stores a reading of the Claude plan limits for the dashboard |
 | `POST /mcp` | JSON-RPC | the MCP endpoint |
 
 ## License

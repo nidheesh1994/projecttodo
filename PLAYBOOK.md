@@ -150,6 +150,8 @@ When a to-do needs a plan (any main to-do; a child when it is big):
 
 - The board is touched when it tells the person something: at the start of a task,
   when the plan changes, and at the end. The work itself gets the attention.
+- A reminder: `remind_at` on a to-do (local `YYYY-MM-DDTHH:MM`); the person's browser
+  shows a notification then. Set one when the person asks to be reminded.
 - Starting a main to-do: `set_current`. Starting a child: `status: doing` when it helps
   the person follow along; the server stamps `actual_start` and its time, and gives its
   parents the same start if they had none. Stamp it when the work starts, not after.

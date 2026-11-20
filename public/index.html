@@ -450,6 +450,100 @@ section { margin-top: 26px; }
 a.fact-v { text-decoration: none; }
 a.fact-v:hover, a.fact-v:focus-visible { text-decoration: underline; }
 .empty { color: var(--muted); font-size: 13px; padding: 10px 6px; }
+/* The first page's dashboard: the date, then cards that flow into as many columns as the window fits (user, 2026-11-20: a new design). */
+.dash-hero { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px 20px; margin: 4px 0 20px; }
+.dash-now { display: flex; align-items: center; gap: 14px; }
+.dash-time { font-family: var(--font-mono); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.clock { display: block; }
+.clock .rim { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.5; }
+.clock .tick { stroke: var(--line-strong); stroke-width: 1.5; stroke-linecap: round; }
+.clock .tick.major { stroke: var(--muted); stroke-width: 2.5; }
+.clock .hand { stroke: var(--fg); stroke-linecap: round; }
+.clock .hand.hour { stroke-width: 4.5; }
+.clock .hand.minute { stroke-width: 3; }
+.clock .hand.second { stroke: var(--today); stroke-width: 1.2; }
+.clock .pin { fill: var(--fg); }
+.clock.pick { touch-action: none; cursor: grab; }
+.clock.pick .hand.minute { stroke: var(--accent); }
+.dash-date { font-size: 32px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.1; }
+.dash-sub { margin-top: 6px; color: var(--muted); font-size: 13.5px; }
+/* fixed columns, so a card stays where it is put; they stack when the window is narrow */
+.dash { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 16px; align-items: start; margin-bottom: 30px; }
+.dcol { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dcol:not(:has(.dcard:not([hidden]))) { display: none; }
+.dcard { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; }
+.dcard > header { display: flex; align-items: center; gap: 10px; min-height: 26px; margin-bottom: 14px; }
+.dlabel { font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.dmeta { margin-left: auto; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.dmeta.live { color: var(--accent); }
+.dnone { color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.drow { display: grid; gap: 2px 12px; align-items: baseline; padding: 9px 0; border-top: 1px solid var(--line); color: inherit; text-decoration: none; min-width: 0; }
+.drow:first-child { border-top: 0; padding-top: 0; }
+.drow:last-child { padding-bottom: 0; }
+.drow .t { font-size: 14px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drow .m { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.drow:hover .t { color: var(--accent); }
+.brand a { color: inherit; text-decoration: none; }
+a.dlabel { text-decoration: none; }
+a.dlabel:hover { color: var(--accent); }
+.proj-row { grid-template-columns: minmax(0, 1fr) auto; }
+.proj-row .m.sub { grid-column: 1 / -1; }
+.rem-form { display: grid; gap: 10px; }
+.rem-when { display: flex; gap: 8px; }
+.rem-when input { flex: 1; }
+#rem-clock { justify-self: center; }
+.rm-dialog { width: min(340px, 100%); }
+.bell { display: inline-flex; padding: 4px; flex: none; }
+.bell:hover { color: var(--fg); }
+.bell.on { color: var(--accent); }
+.bell.on path { fill: var(--accent-soft); }
+#dv-pills { margin-left: auto; }
+.dm-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.dm-head h3 { margin: 0; }
+button.when { border: 0; cursor: pointer; color: var(--fg); }
+.rem-form input { font: inherit; font-size: 13.5px; color: var(--fg); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px 9px; min-width: 0; }
+.wk-sub { margin: 16px 0 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.wk-top { display: flex; align-items: flex-end; gap: 24px; margin-bottom: 16px; }
+.wk-stat b { display: block; font-size: 36px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
+.wk-stat span { font-size: 12px; color: var(--muted); }
+.wk-days { margin-left: auto; display: flex; gap: 4px; }
+.wk-day { width: 26px; padding: 5px 0 4px; border-radius: 8px; background: var(--surface-2); text-align: center; font-family: var(--font-mono); font-size: 10px; color: var(--muted); line-height: 1.3; }
+.wk-day b { display: block; font-size: 12px; color: var(--fg); min-height: 16px; }
+.wk-day.has { background: var(--accent-soft); }
+.wk-day.today { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.wk-row { grid-template-columns: 52px minmax(0, 1fr); }
+.wk-row .t { white-space: normal; font-weight: 500; }
+.wk-row.doing .m { color: var(--accent); }
+.wk-row .x { color: var(--muted); font-size: 12px; font-weight: 400; margin-left: 8px; white-space: nowrap; }
+.rings { display: flex; flex-wrap: wrap; gap: 18px 28px; }
+.ring { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.ring.old { opacity: 0.5; }
+.ring-g { position: relative; width: 78px; height: 78px; flex: none; }
+.ring-g svg { width: 78px; height: 78px; transform: rotate(-90deg); display: block; }
+.ring-g circle { fill: none; stroke-width: 8; stroke: var(--surface-2); }
+.ring-g circle.fill { stroke: var(--accent); stroke-linecap: round; }
+.ring.warn circle.fill { stroke: var(--today); }
+.ring.hot circle.fill { stroke: var(--danger); }
+.ring-g b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.ring .t { font-size: 14px; font-weight: 600; }
+.ring .m { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.ses-row { grid-template-columns: 8px minmax(0, 1fr) auto; }
+.ses-row .m.sub { grid-column: 2 / -1; }
+.sdot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); align-self: center; }
+.sdot.on { background: var(--accent); animation: sdot 1.8s ease-out infinite; }
+@keyframes sdot { from { box-shadow: 0 0 0 0 var(--accent); } to { box-shadow: 0 0 0 9px transparent; } }
+@media (prefers-reduced-motion: reduce) { .sdot.on { animation: none; } }
+.rem-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+.rem-row .acts { grid-row: 1 / span 2; grid-column: 3; align-self: center; display: flex; align-items: center; gap: 6px; }
+.rem-row a.t { color: inherit; text-decoration: none; }
+.rem-row a.t:hover { color: var(--accent); }
+.rem-row .snooze { font-size: 12px; padding: 2px 6px; }
+.rem-row .when { grid-row: 1 / span 2; align-self: start; font-family: var(--font-mono); font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 8px; background: var(--surface-2); white-space: nowrap; }
+.rem-row.due .when { background: var(--danger); color: var(--danger-ink); }
+.rem-row .m { grid-column: 2; }
+.rem-note { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.rem-note .btn { flex: none; font-size: 12px; padding: 3px 10px; }
+@media (max-width: 600px) { .dash-date { font-size: 24px; } .wk-top { flex-wrap: wrap; } .wk-days { margin-left: 0; } .dash-hero { grid-template-columns: 1fr; } .dash-time { font-size: 22px; } }
 
 /* Timeline */
 /* overscroll-behavior keeps a swipe past the start inside the panel: no browser back gesture, the same as the board. */
@@ -606,7 +700,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
 <div class="wrap">
   <header class="top">
     <div class="top-left">
-      <div class="brand"><h1>ProjectTodo</h1></div>
+      <div class="brand"><h1><a href="/" title="The dashboard">ProjectTodo</a></h1></div>
       <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
       <nav class="crumbs" id="crumbs" aria-label="Where you are"><span class="here">Projects</span></nav>
     </div>
@@ -636,8 +730,41 @@ svg.tl { display: block; font-family: var(--font-ui); }
   <div class="banner" id="banner" hidden></div>
 
   <section id="projects">
+    <div id="home">
+    <div class="dash-hero"><div><div class="dash-date" id="dash-date"></div><div class="dash-sub" id="dash-sub"></div></div><div class="dash-now"><span id="dash-clock" aria-hidden="true"></span><time class="dash-time" id="dash-time"></time></div><div></div></div>
+    <div class="dash">
+      <div class="dcol">
+      <article class="dcard" aria-labelledby="dl-week">
+        <header><span class="dlabel" id="dl-week">This week</span><select class="theme-pick" id="week-project" aria-label="The project whose week is shown"></select><span class="dmeta" id="week-range"></span></header>
+        <div id="week"></div>
+      </article>
+      <article class="dcard" aria-labelledby="dl-rem">
+        <header><span class="dlabel" id="dl-rem">Reminders</span><span class="dmeta" id="rem-meta"></span><button class="icon-btn" id="rem-add" type="button" title="Add a reminder" aria-label="Add a reminder" aria-expanded="false">+</button></header>
+        <div id="rem"></div>
+      </article>
+      </div>
+      <div class="dcol">
+      <article class="dcard" id="d-lim" aria-labelledby="dl-lim" hidden>
+        <header><span class="dlabel" id="dl-lim">Claude limits</span><span class="dmeta" id="lim-meta"></span></header>
+        <div id="lim"></div>
+      </article>
+      <article class="dcard" aria-labelledby="dl-proj">
+        <header><a class="dlabel" id="dl-proj" href="/projects" title="The projects page: every project with its modules">Projects</a><span class="dmeta" id="proj-meta"></span></header>
+        <div id="proj"></div>
+      </article>
+      </div>
+      <div class="dcol">
+      <article class="dcard" id="d-ses" aria-labelledby="dl-ses" hidden>
+        <header><span class="dlabel" id="dl-ses">Claude sessions</span><span class="dmeta" id="ses-meta"></span></header>
+        <div id="ses"></div>
+      </article>
+      </div>
+    </div>
+    </div>
+    <div id="plist" hidden>
     <div class="sec-head"><h2>Projects</h2><span class="counts" id="projects-counts"></span></div>
     <div class="projects" id="project-cards"></div>
+    </div>
   </section>
 
   <section id="board">
@@ -666,6 +793,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     <div class="dv-head">
       <div class="dv-titles"><div class="dv-eyebrow" id="dv-eyebrow"></div><h3 id="dv-title"></h3></div>
       <div class="dv-pills" id="dv-pills"></div>
+      <button class="icon-btn bell" type="button" id="dv-bell"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1.8a4 4 0 0 0-4 4c0 3.2-1.4 4.7-1.4 4.7h10.8S12 9 12 5.8a4 4 0 0 0-4-4zM6.6 12.6a1.5 1.5 0 0 0 2.8 0" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>
     <div class="dv-top">
       <dl class="dv-grid" id="dv-grid"></dl>
@@ -702,7 +830,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
 
 <div class="modal" id="dm" hidden role="dialog" aria-modal="true" aria-labelledby="dm-heading">
   <form class="dialog dm-dialog" id="dm-form" autocomplete="off">
-    <h3 id="dm-heading">New draft</h3>
+    <div class="dm-head"><h3 id="dm-heading">New draft</h3><button class="icon-btn bell" type="button" id="dm-bell" hidden><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1.8a4 4 0 0 0-4 4c0 3.2-1.4 4.7-1.4 4.7h10.8S12 9 12 5.8a4 4 0 0 0-4-4zM6.6 12.6a1.5 1.5 0 0 0 2.8 0" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     <div class="dm-sheet" id="dm-sheet">
       <input id="dm-name" class="dm-title" type="text" maxlength="200" placeholder="Title" aria-label="Title">
       <div class="dm-list" id="dm-list"></div>
@@ -751,6 +879,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
       <label class="f">Estimated end<input id="ed-pe" name="planned_end" type="date"></label>
       <label class="f">Actual start<span class="dt"><input id="ed-as" name="actual_start" type="date"><input id="ed-ast" name="actual_start_time" type="time" aria-label="Actual start time"></span></label>
       <label class="f">Actual end<span class="dt"><input id="ed-ad" name="actual_done" type="date"><input id="ed-adt" name="actual_done_time" type="time" aria-label="Actual end time"></span></label>
+      <label class="f">Reminder<input id="ed-remind" type="datetime-local"></label>
       <div class="f full" id="ed-created" hidden></div>
     </div>
     <div class="confirm" id="ed-confirm" hidden>
@@ -763,6 +892,23 @@ svg.tl { display: block; font-family: var(--font-ui); }
       <span class="spacer"></span>
       <button class="btn" type="button" id="ed-cancel">Cancel</button>
       <button class="btn primary" type="submit" id="ed-save">Save</button>
+    </div>
+  </form>
+</div>
+
+<div class="modal" id="rm" hidden role="dialog" aria-modal="true" aria-labelledby="rm-heading">
+  <form class="dialog rm-dialog" id="rem-form" autocomplete="off">
+    <h3 id="rm-heading">Reminder</h3>
+    <div class="rem-form">
+      <input id="rem-text" type="text" maxlength="200" placeholder="Remind me to…" aria-label="What to be reminded of">
+      <div class="rem-when"><input id="rem-date" type="date" aria-label="Day" required><input id="rem-time" type="time" aria-label="Time" required><button class="btn" type="button" id="rem-ampm" title="Switch between morning and afternoon">AM</button></div>
+      <div id="rem-clock" title="Drag a hand, or click the face, to set the time"></div>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn danger" type="button" id="rm-clear">Remove</button>
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="rm-cancel">Cancel</button>
+      <button class="btn primary" type="submit" id="rm-save">Set</button>
     </div>
   </form>
 </div>
@@ -2018,6 +2164,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     const before = [...idx.byId.values()].find(x => x.next_id === it.id);
     if (before) row("After", before.title || "Untitled");
     if (away && project) row("Module", el("a", { href: `/p/${encodeURIComponent(project.id)}`, text: project.name, title: `Open the module's board to change it` }));
+    if (it.remind_at) row("Reminder", whenText(it.remind_at.slice(0, 10), it.remind_at.slice(11)) + (it.reminded_at ? " (sent)" : ""));
     row("Changed", it.updated_at ? new Date(it.updated_at).toLocaleString() : "");
     $("#dv-notes").textContent = it.notes || "";
     $("#dv-notes").hidden = !it.notes;
@@ -2044,6 +2191,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
     $("#dv-edit").hidden = state.readOnly || !!away;
     $("#dv-edit").onclick = () => { closeDetails(); openEditor(it.id); };
     $("#dv-add").hidden = state.readOnly || st === "draft" || !!away;
+    $("#dv-bell").hidden = state.readOnly || !!away;
+    paintBell($("#dv-bell"), it);
+    $("#dv-bell").onclick = () => openReminder(it);
     $("#dv-add").onclick = () => { closeDetails(); openDraftModal({ parentId: it.id }); };
     $("#dv").hidden = false;
     setTimeout(() => $("#dv-close").focus(), 0);
@@ -2055,7 +2205,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
   // ---------- editor ----------
   const F = {
     title: $("#ed-title-in"), notes: $("#ed-notes"), parent: $("#ed-parent"), next: $("#ed-next"), status: $("#ed-status"), owner: $("#ed-owner"),
-    est: $("#ed-est"), doc: $("#ed-doc"), ps: $("#ed-ps"), pe: $("#ed-pe"), as: $("#ed-as"), ad: $("#ed-ad"), ast: $("#ed-ast"), adt: $("#ed-adt"),
+    est: $("#ed-est"), doc: $("#ed-doc"), ps: $("#ed-ps"), pe: $("#ed-pe"), as: $("#ed-as"), ad: $("#ed-ad"), ast: $("#ed-ast"), adt: $("#ed-adt"), remind: $("#ed-remind"),
   };
   function openEditor(id, preset = {}) {
     const idx = index();
@@ -2076,6 +2226,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
     F.ad.value = parseDay(v.actual_done) === null ? "" : v.actual_done;
     F.ast.value = parseTime(v.actual_start_time) === null ? "" : v.actual_start_time;
     F.adt.value = parseTime(v.actual_done_time) === null ? "" : v.actual_done_time;
+    F.remind.value = v.remind_at || "";
     // parent options: every item in tree order, minus this one and its descendants
     F.parent.replaceChildren(el("option", { value: "", text: "None (a root to-do)" }));
     for (const r of idx.rows) {
@@ -2137,12 +2288,14 @@ svg.tl { display: block; font-family: var(--font-ui); }
       estimate_days: estN === null ? null : (Number.isNaN(estN) ? NaN : (!Number.isFinite(estN) || estN <= 0 ? null : Math.round(estN * 1000) / 1000)),
       planned_start: dateOr(F.ps.value), planned_end: dateOr(F.pe.value), actual_start: dateOr(F.as.value), actual_done: dateOr(F.ad.value),
       actual_start_time: timeOr(F.as.value, F.ast.value), actual_done_time: timeOr(F.ad.value, F.adt.value),
+      remind_at: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(F.remind.value) ? F.remind.value.slice(0, 16) : null,
     };
   }
   $("#ed-form").addEventListener("submit", async e => {
     e.preventDefault();
     if (!state.editing) return;
     const v = readForm();
+    if (v.remind_at && window.Notification && Notification.permission === "default") Notification.requestPermission();   // asked on the click that sets a reminder
     if (!v.title) { toast("Give the to-do a title.", true); F.title.focus(); return; }
     if (v.planned_start && v.planned_end && v.planned_end < v.planned_start) { toast("The planned end is before the planned start.", true); return; }
     if (v.actual_start && v.actual_done && v.actual_done < v.actual_start) { toast("The actual done date is before the actual start.", true); return; }
@@ -2209,7 +2362,8 @@ svg.tl { display: block; font-family: var(--font-ui); }
   });
   document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
-    if (!$("#drawer").hidden) closeDrawer();
+    if (!$("#rm").hidden) $("#rm").hidden = true;
+    else if (!$("#drawer").hidden) closeDrawer();
     else if (!$("#dv").hidden) closeDetails();
     else if (!$("#pm").hidden) $("#pm").hidden = true;
     else if (!$("#dm").hidden) closeDraftModal();
@@ -2260,6 +2414,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
     $("#dm-save").textContent = group ? "Save" : "Add";
     $("#dm-save").disabled = state.readOnly;
     $("#dm-delete").hidden = !group || state.readOnly;
+    $("#dm-bell").hidden = !group || state.readOnly;   // a draft has to exist before it can carry a reminder
+    paintBell($("#dm-bell"), group);
+    $("#dm-bell").onclick = () => openReminder(findAny(group.id) || group);
     $("#dm-confirm").hidden = true;
     dm.focus = { index: 0, caret: 0 };
     renderDraftLines(false);
@@ -2635,7 +2792,209 @@ svg.tl { display: block; font-family: var(--font-ui); }
   $("#dr-copy").addEventListener("click", () => copyText(drawerPath, $("#dr-path")));
   $("#drawer").addEventListener("click", e => { if (e.target === $("#drawer")) $("#drawer").hidden = true; });
   // ---------- projects ----------
+  // The first page, above the projects (user, 2026-11-20): the date, then cards. This week: the main to-dos of one picked
+  // project and its modules that finished since Monday or are in progress, for a weekly meeting. Reminders. And, when the
+  // server is told where Claude Code keeps its files, the plan limits a session posted and the sessions of the last day.
+  function renderDash() {
+    const all = state.all || [], now = new Date(), nowStr = `${todayStr()}T${nowTime()}`;
+    const nameOf = id => (state.projects.find(x => x.id === id) || {}).name || "";
+    const ago = at => { const m = Math.max(0, Math.round((Date.now() - Date.parse(at)) / 60000)); return m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+    const none = text => el("div", { class: "dnone", text });
+
+    // this week
+    const tops = state.projects.filter(p => !p.parent_id);
+    let pick = null; try { pick = localStorage.getItem("projecttodo-week-project"); } catch (e) { /* fine */ }
+    const proj = tops.find(p => p.id === pick) || tops[0];
+    const sel = $("#week-project");
+    if ([...sel.options].map(o => o.value).join() !== tops.map(p => p.id).join()) sel.replaceChildren(...tops.map(p => el("option", { value: p.id, text: p.name })));   // only when the projects change, so an open menu stays open
+    if (proj) sel.value = proj.id;
+    const today = parseDay(todayStr()), monday = today - (dayDate(today).getUTCDay() + 6) % 7;
+    const ids = new Set(proj ? [proj.id, ...state.projects.filter(p => p.parent_id === proj.id).map(p => p.id)] : []);
+    const mine = all.filter(t => ids.has(t.project_id) && !t.parent_id);
+    const done = mine.filter(t => t.status === "done" && parseDay(t.actual_done) !== null && parseDay(t.actual_done) >= monday).sort((x, y) => `${x.actual_done} ${x.actual_done_time || ""}`.localeCompare(`${y.actual_done} ${y.actual_done_time || ""}`));
+    const doing = mine.filter(t => t.status === "doing");
+    const onDay = d => done.filter(t => parseDay(t.actual_done) === monday + d).length;
+    const module = t => (proj && t.project_id !== proj.id ? nameOf(t.project_id) : "");
+    const dayLabel = n => `${"Mon Tue Wed Thu Fri Sat Sun".split(" ")[n - monday] || ""} ${dayDate(n).getUTCDate()}`;
+    // what the agent logged from the Claude sessions for this project, this week
+    const J = state.journal || {}, notes = Object.keys(J).filter(day => parseDay(day) >= monday && parseDay(day) <= monday + 6).sort().flatMap(day => J[day].filter(e => ids.has(e.project_id)).map(e => ({ ...e, day })));
+    $("#week-range").textContent = `${fmtDay(dayStr(monday))} – ${fmtDay(dayStr(monday + 6))}`;
+    $("#week").replaceChildren(
+      el("div", { class: "wk-top" },
+        el("div", { class: "wk-stat" }, el("b", { text: String(done.length) }), el("span", { text: "done" })),
+        el("div", { class: "wk-stat" }, el("b", { text: String(doing.length) }), el("span", { text: "in progress" })),
+        el("div", { class: "wk-days", "aria-hidden": "true" }, ...[0, 1, 2, 3, 4, 5, 6].map(d => el("div", { class: `wk-day${onDay(d) ? " has" : ""}${monday + d === today ? " today" : ""}` }, "MTWTFSS"[d], el("b", { text: onDay(d) ? String(onDay(d)) : "" }))))),
+      ...(done.length || doing.length ? [
+        ...done.map(t => { const n = parseDay(t.actual_done); return el("div", { class: "drow wk-row" }, el("span", { class: "m", text: dayLabel(n) }), el("span", { class: "t" }, `✓ ${t.title || "Untitled"}`, module(t) ? el("span", { class: "x", text: module(t) }) : null)); }),
+        ...doing.map(t => el("div", { class: "drow wk-row doing" }, el("span", { class: "m", text: "now" }), el("span", { class: "t" }, t.title || "Untitled", el("span", { class: "x", text: [module(t), t.actual_start ? `since ${fmtDay(t.actual_start)}` : ""].filter(Boolean).join(" · ") })))),
+      ] : notes.length ? [] : [none(state.loaded ? "Nothing finished or in progress this week yet." : "Loading…")]),
+      ...(notes.length ? [el("div", { class: "wk-sub", text: "From your Claude sessions" }), ...notes.map(e => el("div", { class: "drow wk-row" }, el("span", { class: "m", text: dayLabel(parseDay(e.day)) }), el("span", { class: "t" }, e.text, module(e) ? el("span", { class: "x", text: module(e) }) : null)))] : []));
+
+    // reminders
+    const reminders = all.filter(t => t.remind_at && t.status !== "done").sort((x, y) => x.remind_at.localeCompare(y.remind_at));
+    const dueN = reminders.filter(t => t.remind_at <= nowStr).length, perm = window.Notification ? Notification.permission : "denied";
+    $("#rem-meta").textContent = dueN ? `${dueN} due` : "";
+    $("#rem").replaceChildren(...[
+      ...(reminders.length ? reminders.map(t => { const due = t.remind_at <= nowStr; return el("div", { class: `drow rem-row${due ? " due" : ""}` },
+        el(state.readOnly ? "span" : "button", { class: "when", type: state.readOnly ? null : "button", title: state.readOnly ? null : "Change the time, or remove the reminder", onclick: state.readOnly ? null : () => openReminder(t), text: `${t.remind_at.slice(0, 10) === todayStr() ? "Today" : fmtDay(t.remind_at.slice(0, 10))} ${t.remind_at.slice(11)}` }),
+        t.project_id ? el("a", { class: "t", href: `/p/${encodeURIComponent(t.project_id)}`, text: t.title || "Untitled" }) : el("span", { class: "t", text: t.title || "Untitled" }),
+        el("span", { class: "m", text: nameOf(t.project_id) }),
+        state.readOnly ? null : el("span", { class: "acts" },
+          due ? el("select", { class: "theme-pick snooze", "aria-label": `Snooze ${t.title}`, onchange: e => snooze(t, +e.target.value) }, el("option", { value: "", text: "Snooze" }), el("option", { value: "10", text: "10 minutes" }), el("option", { value: "60", text: "1 hour" }), el("option", { value: "1440", text: "1 day" })) : null,
+          t.project_id ? null : el("button", { class: "icon-btn", type: "button", title: "Done: remove this reminder", "aria-label": `Done: remove ${t.title}`, onclick: async () => { if (await write("Removing the reminder", () => call("DELETE", `/api/todos/${encodeURIComponent(t.id)}`, { if_version: t.version }))) loadAll(); } }, "✓"))); })
+        : [none("Nothing to remember. Press + for a reminder of its own, or set one in a to-do's editor.")]),
+      // where notifications stand in this browser, when they are not on
+      perm === "default" ? el("button", { class: "btn", type: "button", style: "margin-top:12px", onclick: () => Notification.requestPermission().then(renderDash) }, "Turn on notifications") : null,
+      perm === "denied" ? el("div", { class: "rem-note" }, el("span", { text: window.Notification ? "Notifications are blocked for this site. Allow them in the browser's site settings (the icon left of the address), then reload." : "This browser cannot show notifications." })) : null].filter(Boolean));   // replaceChildren would print a null
+
+    // projects: a row each, straight to its board; the heading opens the projects page
+    $("#proj-meta").textContent = tops.length ? String(tops.length) : "";
+    $("#proj").replaceChildren(...(tops.length ? tops.map(p => { const c = p.counts || {}, mods = state.projects.filter(m => m.parent_id === p.id).length; return el("a", { class: "drow proj-row", href: `/p/${encodeURIComponent(p.id)}` }, el("span", { class: "t", text: p.name }), el("span", { class: "m", text: [`${(c.main || 0) - (c.main_done || 0)} open`, mods ? `${mods} ${mods === 1 ? "module" : "modules"}` : ""].filter(Boolean).join(" · ") }), p.current ? el("span", { class: "m sub", text: `current: ${p.current.title}` }) : null); }) : [none("No projects yet. Open Projects to make one.")]));
+
+    // Claude limits: a ring per window, from the last reading a session posted
+    const L = state.limits, C = 2 * Math.PI * 31;
+    $("#d-lim").hidden = !(L || state.claude);
+    $("#lim-meta").textContent = L ? `${L.plan ? L.plan + " · " : ""}read ${ago(L.at)}` : "";
+    $("#lim").replaceChildren(L ? el("div", { class: "rings" }, ...L.windows.map(w => {
+      const p = Math.max(0, Math.min(100, w.percentUsed)), left = w.resetsAt ? Date.parse(w.resetsAt) - Date.now() : null, h = left === null ? 0 : Math.round(left / 36e5);
+      const svg = svgEl("svg", { viewBox: "0 0 78 78", "aria-hidden": "true" });
+      svg.append(svgEl("circle", { cx: 39, cy: 39, r: 31 }), svgEl("circle", { class: "fill", cx: 39, cy: 39, r: 31, "stroke-dasharray": `${C * p / 100} ${C}` }));
+      return el("div", { class: `ring${p >= 90 ? " hot" : p >= 70 ? " warn" : ""}${left !== null && left < 0 ? " old" : ""}` }, el("div", { class: "ring-g" }, svg, el("b", { text: `${Math.round(p)}%` })),
+        el("div", {}, el("div", { class: "t", text: w.label }), el("div", { class: "m", text: left === null ? "" : left < 0 ? "has reset since this reading" : `resets in ${h >= 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${h}h`}` })));
+    })) : none("No reading yet. A Claude session posts it."));
+
+    // Claude sessions
+    const S = state.claude || [], isOn = c => Date.now() - Date.parse(c.at) < 120000, live = S.filter(isOn).length;
+    $("#d-ses").hidden = !state.claude;
+    $("#ses-meta").textContent = live ? `${live} active` : "";
+    $("#ses-meta").classList.toggle("live", !!live);
+    $("#ses").replaceChildren(...(S.length ? S.map(c => el("div", { class: "drow ses-row", title: c.prompt ? `Last prompt: ${c.prompt}` : "" }, el("span", { class: `sdot${isOn(c) ? " on" : ""}` }), el("span", { class: "t", text: c.title || c.prompt || "Untitled session" }), el("span", { class: "m", text: isOn(c) ? "now" : ago(c.at) }), el("span", { class: "m sub", text: [c.folder, c.branch].filter(Boolean).join(" · ") }))) : [none("No session in the last day.")]));
+
+    // the date, the ISO week, and what needs a look
+    const th = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())); th.setUTCDate(th.getUTCDate() + 4 - (th.getUTCDay() || 7));
+    const weekNo = Math.ceil(((th - Date.UTC(th.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+    $("#dash-date").textContent = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    $("#dash-sub").textContent = [`Week ${weekNo}`, live ? `${live} Claude ${live === 1 ? "session" : "sessions"} active` : "", dueN ? `${dueN} ${dueN === 1 ? "reminder" : "reminders"} due` : ""].filter(Boolean).join(" · ");
+  }
+  // An analog clock face: twelve marks and two hands (three with seconds). set(h, m, s) turns the hands.
+  function clockFace(size, seconds) {
+    const svg = svgEl("svg", { class: "clock", viewBox: "0 0 100 100", width: size, height: size });
+    svg.append(svgEl("circle", { class: "rim", cx: 50, cy: 50, r: 47 }));
+    for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; svg.append(svgEl("line", { class: i % 3 ? "tick" : "tick major", x1: 50 + Math.sin(a) * 39, y1: 50 - Math.cos(a) * 39, x2: 50 + Math.sin(a) * 43, y2: 50 - Math.cos(a) * 43 })); }
+    const hand = (cls, len) => { const l = svgEl("line", { class: `hand ${cls}`, x1: 50, y1: 50, x2: 50, y2: 50 - len }); svg.append(l); return l; };
+    const hh = hand("hour", 23), mh = hand("minute", 34), sh = seconds ? hand("second", 38) : null;
+    svg.append(svgEl("circle", { class: "pin", cx: 50, cy: 50, r: 2.6 }));
+    svg.set = (h, m, sec = 0) => { hh.setAttribute("transform", `rotate(${(h % 12 + m / 60) * 30} 50 50)`); mh.setAttribute("transform", `rotate(${(m + sec / 60) * 6} 50 50)`); if (sh) sh.setAttribute("transform", `rotate(${sec * 6} 50 50)`); };
+    return svg;
+  }
+  // the running clock in the middle of the dashboard's top row (user, 2026-11-20)
+  const nowClock = clockFace(64, true);
+  $("#dash-clock").append(nowClock);
+  const tickClock = () => { if (!state.home) return; const d = new Date(); nowClock.set(d.getHours(), d.getMinutes(), d.getSeconds()); $("#dash-time").textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; };
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  // The reminder's time is set on a clock: drag a hand, or click the face, and the hand nearer to the pointer follows it, to
+  // the minute. The minute hand carries the hour over twelve, the hour hand the half of the day. The time field beside it
+  // shows the same time and can be typed in. (user, 2026-11-20)
+  const pickClock = clockFace(150, false);
+  pickClock.classList.add("pick");
+  $("#rem-clock").append(pickClock);
+  const pickTime = () => { const m = /^(\d\d):(\d\d)/.exec($("#rem-time").value); return m ? [+m[1], +m[2]] : [0, 0]; };
+  const showPick = (h, m) => { $("#rem-time").value = `${pad2(h)}:${pad2(m)}`; pickClock.set(h, m); $("#rem-ampm").textContent = h < 12 ? "AM" : "PM"; };
+  $("#rem-time").addEventListener("input", () => showPick(...pickTime()));
+  $("#rem-ampm").addEventListener("click", () => { const [h, m] = pickTime(); showPick((h + 12) % 24, m); });
+  pickClock.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return;
+    const angle = ev => { const r = pickClock.getBoundingClientRect(); return (Math.atan2(ev.clientX - r.left - r.width / 2, r.top + r.height / 2 - ev.clientY) * 180 / Math.PI + 360) % 360; };
+    const apart = (x, y) => Math.abs(((x - y + 540) % 360) - 180);
+    const [h0, m0] = pickTime(), a0 = angle(e);
+    const hourHand = apart(a0, (h0 % 12 + m0 / 60) * 30) < apart(a0, m0 * 6);
+    const follow = (ev, dragging) => {
+      let [h, m] = pickTime();
+      if (hourHand) {
+        const to = Math.round(angle(ev) / 30) % 12, was = h % 12;
+        const flip = dragging && ((was >= 9 && to <= 2) || (was <= 2 && to >= 9));   // dragged over twelve: the other half of the day
+        h = to + ((h >= 12) !== flip ? 12 : 0);
+      } else {
+        const to = Math.round(angle(ev) / 6) % 60;
+        if (dragging && m >= 45 && to <= 14) h = (h + 1) % 24; else if (dragging && m <= 14 && to >= 45) h = (h + 23) % 24;   // over twelve: the next or the last hour
+        m = to;
+      }
+      showPick(h, m);
+    };
+    const move = ev => follow(ev, true);
+    const up = () => { pickClock.removeEventListener("pointermove", move); pickClock.removeEventListener("pointerup", up); pickClock.removeEventListener("pointercancel", up); };
+    pickClock.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    follow(e, false);
+    pickClock.addEventListener("pointermove", move);
+    pickClock.addEventListener("pointerup", up);
+    pickClock.addEventListener("pointercancel", up);
+  });
+  const localStamp = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  // Snooze: the reminder moves on by that long from now, and the server arms it again.
+  async function snooze(t, minutes) {
+    if (!minutes) return;
+    if (await write("Snoozing the reminder", () => call("PATCH", `/api/todos/${encodeURIComponent(t.id)}`, { if_version: t.version, data: { remind_at: localStamp(new Date(Date.now() + minutes * 60000)) } }))) loadAll();
+  }
+  // One reminder dialog, opened from the dashboard's + (a reminder of its own), from its time badge, from the bell of a
+  // to-do's view and from the bell of a draft's pad. It sets remind_at; Remove clears it, and deletes a reminder of its own.
+  const findAny = id => state.items.find(x => x.id === id) || (state.all || []).find(x => x.id === id) || (state.moduleItems || []).find(x => x.id === id) || null;
+  function paintBell(btn, it) {
+    const at = it && it.remind_at;
+    btn.classList.toggle("on", !!at);
+    btn.title = at ? `Reminder ${whenText(at.slice(0, 10), at.slice(11))}: change or remove it` : "Set a reminder";
+    btn.setAttribute("aria-label", btn.title);
+  }
+  function openReminder(it) {
+    state.rm = it ? it.id : null;
+    const own = !it || !it.project_id, at = it && it.remind_at ? it.remind_at : localStamp(new Date());   // a new one opens on the time it is now
+    $("#rm-heading").textContent = !it ? "New reminder" : own ? "Reminder" : `Reminder · ${it.title || "Untitled"}`;
+    $("#rem-text").hidden = !own;
+    $("#rem-text").required = own;
+    $("#rem-text").value = it && own ? it.title || "" : "";
+    $("#rem-date").value = at.slice(0, 10);
+    showPick(+at.slice(11, 13), +at.slice(14, 16));
+    $("#rm-clear").hidden = !(it && it.remind_at);
+    $("#rm-save").textContent = it ? "Set" : "Add";
+    $("#rm").hidden = false;
+    setTimeout(() => (own ? $("#rem-text") : $("#rem-time")).focus(), 0);
+  }
+  // after a change: read the rows again, and draw the open view or pad of that to-do again so its bell shows the new state
+  async function reminderSaved(id) {
+    $("#rm").hidden = true;
+    await loadAll();
+    if (id && !$("#dv").hidden) openDetails(id);
+    if (id && !$("#dm").hidden) paintBell($("#dm-bell"), findAny(id));
+  }
+  $("#rem-add").addEventListener("click", () => openReminder(null));
+  $("#rm-cancel").addEventListener("click", () => { $("#rm").hidden = true; });
+  $("#rm").addEventListener("click", e => { if (e.target === $("#rm")) $("#rm").hidden = true; });
+  $("#rem-form").addEventListener("submit", async e => {
+    e.preventDefault();
+    const at = `${$("#rem-date").value}T${$("#rem-time").value.slice(0, 5)}`, title = $("#rem-text").value.trim(), stamp = nowIso(), it = state.rm ? findAny(state.rm) : null;
+    if (at.length !== 16 || (state.rm && !it) || (!it && !title)) return;
+    if (window.Notification && Notification.permission === "default") Notification.requestPermission();
+    const ok = it
+      ? await write("Setting the reminder", () => call("PATCH", `/api/todos/${encodeURIComponent(it.id)}`, { if_version: it.version, data: { remind_at: at, ...(it.project_id || !title ? {} : { title }), updated_at: stamp } }))
+      : await write("Adding the reminder", () => call("POST", "/api/todos", { data: { id: newId(title), project_id: null, title, status: "todo", remind_at: at, created_at: stamp, updated_at: stamp } }));
+    if (ok) reminderSaved(state.rm);
+  });
+  $("#rm-clear").addEventListener("click", async () => {
+    const it = state.rm ? findAny(state.rm) : null;
+    if (!it) return;
+    // a to-do only loses its reminder; a reminder of its own is nothing without its time, so it goes
+    const path = `/api/todos/${encodeURIComponent(it.id)}`;
+    if (await write("Removing the reminder", () => (it.project_id ? call("PATCH", path, { if_version: it.version, data: { remind_at: null, updated_at: nowIso() } }) : call("DELETE", path, { if_version: it.version })))) reminderSaved(it.project_id ? it.id : null);
+  });
+  $("#week-project").addEventListener("change", e => { try { localStorage.setItem("projecttodo-week-project", e.target.value); } catch (err) { /* fine */ } renderDash(); });
+  setInterval(() => { if (state.home) loadAll(); }, 30000);   // the first page keeps its sessions and due marks fresh
   function renderProjects() {
+    $("#home").hidden = !state.home;
+    $("#plist").hidden = state.home;
+    $("#new-project").hidden = state.home;
+    if (state.home) renderDash();
     const box = $("#project-cards");
     box.replaceChildren();
     const STATUS_LABEL = { doing: "Current", todo: "Next", deferred: "Later", done: "Done" };
@@ -2740,6 +3099,7 @@ svg.tl { display: block; font-family: var(--font-ui); }
   const route = location.pathname.replace(/\/+$/, "").match(/^\/p\/([^/]+)(\/tree)?$/);
   state.project = route ? decodeURIComponent(route[1]) : null;
   state.view = !route ? "projects" : (route[2] ? "tree" : "board");
+  state.home = !route && location.pathname.replace(/\/+$/, "") === "";   // the dashboard; /projects is the projects page
   document.documentElement.dataset.view = state.view;
   if (state.project) { $("#nav-board").href = `/p/${encodeURIComponent(state.project)}`; $("#nav-tree").href = `/p/${encodeURIComponent(state.project)}/tree`; }
   for (const a of document.querySelectorAll(".jump a")) a.classList.toggle("current", a.dataset.view === state.view);
@@ -2777,9 +3137,9 @@ svg.tl { display: block; font-family: var(--font-ui); }
   function renderCrumbs() {
     const box = $("#crumbs");
     const project = currentProject();
-    if (!project) { box.replaceChildren(el("span", { class: "here", text: "Projects" })); return; }
+    if (!project) { box.replaceChildren(...(state.home ? [el("span", { class: "here", text: "Dashboard" })] : [el("a", { href: "/", text: "Dashboard" }), el("span", { class: "sep", text: "/" }), el("span", { class: "here", text: "Projects" })])); return; }
     const parent = project.parent_id ? state.projects.find(p => p.id === project.parent_id) : null;
-    const parts = [el("a", { href: "/", text: "Projects" })];
+    const parts = [el("a", { href: "/projects", text: "Projects" })];
     if (parent) parts.push(el("a", { href: `/p/${encodeURIComponent(parent.id)}`, text: parent.name, title: `${parent.name}: the project's board` }));
     parts.push(el("a", { href: `/p/${encodeURIComponent(project.id)}`, text: project.name, title: `${project.name}: its board` }));
     parts.push(el("span", { class: "here", text: state.view === "tree" ? "Timeline" : "Board" }));
@@ -2787,8 +3147,13 @@ svg.tl { display: block; font-family: var(--font-ui); }
   }
   function loadAll() {
     if (loading) return loading;
-    loading = Promise.all([call("GET", "/api/projects"), state.project ? call("GET", `/api/todos?project=${encodeURIComponent(state.project)}&modules=1`) : Promise.resolve({ todos: [] })]).then(([p, t]) => {
+    // the first page reads every project's rows, and the Claude sessions, for its dashboard
+    loading = Promise.all([call("GET", "/api/projects"), call("GET", state.project ? `/api/todos?project=${encodeURIComponent(state.project)}&modules=1` : "/api/todos"), state.project ? null : call("GET", "/api/claude").catch(() => null)]).then(([p, t, c]) => {
       state.projects = p.projects;
+      state.all = state.project ? [] : t.todos;
+      state.claude = c ? c.sessions : null;
+      state.limits = c ? c.limits : null;
+      state.journal = c ? c.journal : null;
       state.items = t.todos.filter(x => x.project_id === state.project).map(x => ({ ...x }));
       state.moduleItems = t.todos.filter(x => x.project_id !== state.project).map(x => ({ ...x }));   // the rows of the project's modules, for the timeline's bars
       state.loaded = true;
@@ -2817,6 +3182,25 @@ svg.tl { display: block; font-family: var(--font-ui); }
       if (boot && state.boot && boot !== state.boot) { location.reload(); return; }
       if (boot) state.boot = boot;
       loadAll().then(() => { if (state.pending === 0) setLive("on", "live"); });
+    });
+    // A due reminder comes on every tick until a page says it showed the notification. This page shows one when it may (it
+    // stays on screen until dismissed) and tells the server; a page that may not only shows a toast, once per tab.
+    events.addEventListener("reminder", e => {
+      for (const r of JSON.parse(e.data)) {
+        if (window.Notification && Notification.permission === "granted") {
+          try {
+            const n = new Notification(r.title || "Untitled", { body: `Reminder${r.project ? ` · ${r.project}` : ""}`, tag: `${r.id} ${r.remind_at}` });   // one per firing, whatever the number of tabs: a snoozed one alerts again
+            n.onerror = () => toast("The browser could not show the notification for this reminder.", true);
+            n.onclick = () => { window.focus(); location.href = r.project_id ? `/p/${encodeURIComponent(r.project_id)}` : "/"; };
+            call("PATCH", `/api/todos/${encodeURIComponent(r.id)}`, { if_version: r.version, data: { reminded_at: nowIso() } }).catch(() => { /* another tab told the server first */ });
+          } catch (err) { /* this browser cannot show one from a page: the toast below is all there is */ }
+        }
+        const key = `${r.id} ${r.remind_at}`;
+        let seen = []; try { seen = JSON.parse(sessionStorage.getItem("projecttodo-reminded") || "[]"); } catch (err) { /* fine */ }
+        if (seen.includes(key)) continue;
+        toast(`Reminder: ${r.title || "Untitled"}`);
+        try { sessionStorage.setItem("projecttodo-reminded", JSON.stringify([...seen, key].slice(-50))); } catch (err) { /* fine */ }
+      }
     });
     events.onerror = () => { setLive("err", "disconnected"); };
     events.onopen = () => { if (state.pending === 0) setLive("on", "live"); };

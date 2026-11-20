@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "./start.sh",
+    "test": "node --test",
     "mcp": "node mcp.mjs"
   },
   "bin": {
